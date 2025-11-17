@@ -87,8 +87,8 @@ function parseMessageList(messageList) {
 
   const lines = messageList.split('\n');
   for (const line of lines) {
-    // Match format: MSGID SEV MESSAGE
-    const match = line.match(/^([A-Z]{3}\d{4})\s+\d+\s+(.+)$/);
+    // Match format: MSGID SEV MESSAGE (with optional line numbers, arrows, and / separator)
+    const match = line.match(/([A-Z]{3}\d{4})\s+\d+\s+\/?\s*(.+)$/);
     if (match) {
       msgMap.set(match[1].trim(), match[2].trim());
     }
@@ -119,8 +119,8 @@ function extractProgramType(lines) {
   let hasPrinter = false;
 
   for (const line of lines) {
-    if (line.match(/^F.*WORKSTN/i)) hasDisplayFile = true;
-    if (line.match(/^F.*PRINTER/i)) hasPrinter = true;
+    if (line.match(/^\s*F.*WORKSTN/i)) hasDisplayFile = true;
+    if (line.match(/^\s*F.*PRINTER/i)) hasPrinter = true;
     if (line.match(/EXFMT|WRITE.*SCREEN|DSPF/i)) hasDisplayFile = true;
   }
 
@@ -150,7 +150,7 @@ function extractProgramOutput(lines) {
   const outputs = [];
 
   for (const line of lines) {
-    if (line.match(/^F.*O.*PRINTER/i)) {
+    if (line.match(/^\s*F.*O.*PRINTER/i)) {
       outputs.push('Printed report');
     }
     if (line.match(/UPDATE|WRITE.*(?!SCREEN)/i)) {
@@ -192,7 +192,7 @@ function extractFileOperations(lines) {
 
   // Second pass: extract file definitions
   for (const line of lines) {
-    const fMatch = line.match(/^F(\w+)\s+.*?(\w*)\s+(\w*)\s+(\w*)\s+.*?(DISK|WORKSTN|PRINTER)/i);
+    const fMatch = line.match(/^\s*F(\w+)\s+.*?(\w*)\s+(\w*)\s+(\w*)\s+.*?(DISK|WORKSTN|PRINTER)/i);
 
     if (fMatch) {
       const fileName = fMatch[1].trim();
