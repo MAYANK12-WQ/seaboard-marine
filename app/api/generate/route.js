@@ -26,38 +26,47 @@ export async function POST(request) {
 function generateRPGDocumentation(rpgCode, messageList) {
   const lines = rpgCode.split('\n');
 
-  // Extract program name
-  const programName = extractProgramName(lines);
+  // Parse message list first for use throughout
+  const messageMap = parseMessageList(messageList);
 
-  // Extract file operations
+  // Extract program metadata
+  const programName = extractProgramName(lines);
+  const programType = extractProgramType(lines);
+  const programInput = extractProgramInput(lines);
+  const programOutput = extractProgramOutput(lines);
+
+  // Extract file operations with composite keys
   const fileOps = extractFileOperations(lines);
 
-  // Extract messages
-  const messages = extractMessages(lines, messageList);
+  // Extract messages with actual text from message list
+  const messages = extractMessages(lines, messageMap);
 
-  // Extract business rules
+  // Extract business rules (excluding error indicators, including screen filters)
   const businessRules = extractBusinessRules(lines);
 
-  // Extract dependencies
+  // Extract dependencies (excluding help text)
   const dependencies = extractDependencies(lines, fileOps);
 
-  // Extract validations
-  const validations = extractValidations(lines, messages);
+  // Extract validations with message integration
+  const validations = extractValidations(lines, messageMap);
 
-  // Extract data mappings
+  // Extract data mappings with transform notes
   const dataMappings = extractDataMappings(lines);
 
-  // Extract call stack
+  // Extract call stack (excluding command/help/exit)
   const callStack = extractCallStack(lines);
 
-  // Extract screen actions
+  // Extract screen actions (Edit/Delete/Print/Add)
   const screenActions = extractScreenActions(lines);
 
-  // Generate detailed processing
-  const detailedProcessing = generateDetailedProcessing(lines);
+  // Generate detailed processing with subroutine parameters (50-70 line limit)
+  const detailedProcessing = generateDetailedProcessing(lines, messageMap);
 
   return formatDocumentation({
     programName,
+    programType,
+    programInput,
+    programOutput,
     messageList,
     fileOps,
     businessRules,
@@ -71,46 +80,166 @@ function generateRPGDocumentation(rpgCode, messageList) {
   });
 }
 
-function extractProgramName(lines) {
-  // Look for program name in various formats
+function parseMessageList(messageList) {
+  const msgMap = new Map();
+
+  if (!messageList) return msgMap;
+
+  const lines = messageList.split('\n');
   for (const line of lines) {
+    // Match format: MSGID SEV MESSAGE
+    const match = line.match(/^([A-Z]{3}\d{4})\s+\d+\s+(.+)$/);
+    if (match) {
+      msgMap.set(match[1].trim(), match[2].trim());
+    }
+  }
+
+  return msgMap;
+}
+
+function extractProgramName(lines) {
+  for (const line of lines) {
+    // Look for program name in various formats
     const pgmMatch = line.match(/(?:PGM|PROGRAM)\s*:\s*(\w+)/i);
     if (pgmMatch) return pgmMatch[1];
 
     const hMatch = line.match(/^H\s+.*DFTNAME\((\w+)\)/i);
     if (hMatch) return hMatch[1];
+
+    // Check for comment lines with program name
+    const commentMatch = line.match(/^\s*\*+\s*(?:PROGRAM|PGM)\s*[:\-]\s*(\w+)/i);
+    if (commentMatch) return commentMatch[1];
   }
   return 'UNKNOWN_PROGRAM';
 }
 
-function extractFileOperations(lines) {
-  const files = [];
-  const fileMap = new Map();
+function extractProgramType(lines) {
+  // Determine if Batch, Screen, or Report
+  let hasDisplayFile = false;
+  let hasPrinter = false;
 
   for (const line of lines) {
-    // F-spec file declarations
-    const fMatch = line.match(/^F(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s+DISK/i);
+    if (line.match(/^F.*WORKSTN/i)) hasDisplayFile = true;
+    if (line.match(/^F.*PRINTER/i)) hasPrinter = true;
+    if (line.match(/EXFMT|WRITE.*SCREEN|DSPF/i)) hasDisplayFile = true;
+  }
+
+  if (hasPrinter) return 'Report';
+  if (hasDisplayFile) return 'Interactive/Screen';
+  return 'Batch';
+}
+
+function extractProgramInput(lines) {
+  const inputs = [];
+
+  for (const line of lines) {
+    // Look for PARM or *ENTRY parameters
+    if (line.match(/\*ENTRY\s+PLIST/i)) {
+      inputs.push('Program parameters via PLIST');
+    }
+    if (line.match(/EXFMT\s+(\w+)/i)) {
+      const match = line.match(/EXFMT\s+(\w+)/i);
+      inputs.push(`Screen input: ${match[1]}`);
+    }
+  }
+
+  return inputs.length > 0 ? inputs.join(', ') : 'None specified';
+}
+
+function extractProgramOutput(lines) {
+  const outputs = [];
+
+  for (const line of lines) {
+    if (line.match(/^F.*O.*PRINTER/i)) {
+      outputs.push('Printed report');
+    }
+    if (line.match(/UPDATE|WRITE.*(?!SCREEN)/i)) {
+      outputs.push('Updated database records');
+    }
+  }
+
+  return outputs.length > 0 ? outputs.join(', ') : 'None specified';
+}
+
+function extractFileOperations(lines) {
+  const fileMap = new Map();
+  const klistMap = new Map(); // Store KLIST definitions
+
+  // First pass: collect KLIST definitions
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const klistMatch = line.match(/C\s+(\w+)\s+KLIST/i);
+
+    if (klistMatch) {
+      const klistName = klistMatch[1];
+      const keyFields = [];
+
+      // Look ahead for KFLD entries
+      for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        const kfldMatch = lines[j].match(/C\s+KFLD\s+(\w+)/i);
+        if (kfldMatch) {
+          keyFields.push(kfldMatch[1]);
+        } else if (!lines[j].match(/^\s*C\s*$/)) {
+          break; // End of KLIST definition
+        }
+      }
+
+      if (keyFields.length > 0) {
+        klistMap.set(klistName, keyFields);
+      }
+    }
+  }
+
+  // Second pass: extract file definitions
+  for (const line of lines) {
+    const fMatch = line.match(/^F(\w+)\s+.*?(\w*)\s+(\w*)\s+(\w*)\s+.*?(DISK|WORKSTN|PRINTER)/i);
+
     if (fMatch) {
       const fileName = fMatch[1].trim();
-      const fileType = fMatch[2].trim();
-      const designation = fMatch[3].trim();
+      const fileSpec = line.toUpperCase();
 
       let purpose = 'Input';
-      if (fileType.includes('U') || designation.includes('U')) purpose = 'Update';
-      else if (fileType.includes('O')) purpose = 'Output';
-      else if (fileType.includes('I') && fileType.includes('O')) purpose = 'Input/Output';
+      if (fileSpec.includes('UF') || fileSpec.includes('UPDATE')) purpose = 'Update';
+      else if (fileSpec.includes('OUTPUT') || fileSpec.includes(' O ')) purpose = 'Output';
+      else if (fileSpec.includes('IF')) purpose = 'Input';
 
-      const accessType = line.includes('KEYED') ? 'Keyed' : 'Sequential';
+      const accessType = fileSpec.includes('KEYED') ? 'Keyed' : 'Sequential';
 
-      // Try to find key fields
-      const keyFields = extractKeyFieldsForFile(lines, fileName);
+      // Find key fields for this file
+      let keyFieldsStr = 'N/A';
+      let keyFieldType = 'N/A';
+
+      // Check for KNUM in F-spec
+      const knumMatch = line.match(/KNUM\((\d+)\)/i);
+      if (knumMatch) {
+        const numKeys = parseInt(knumMatch[1]);
+        keyFieldType = numKeys > 1 ? 'Composite Key' : 'Primary Key';
+      }
+
+      // Check if file is used with KLIST
+      for (let i = 0; i < lines.length; i++) {
+        const chainMatch = lines[i].match(/C\s+(\w+)\s+(?:CHAIN|SETLL|READE|SETGT)\s+(\w+)/i);
+        if (chainMatch && chainMatch[2] === fileName) {
+          const keyOrKlist = chainMatch[1];
+          if (klistMap.has(keyOrKlist)) {
+            const keys = klistMap.get(keyOrKlist);
+            keyFieldsStr = keys.join(' + ');
+            keyFieldType = keys.length > 1 ? 'Composite Key' : 'Primary Key';
+          } else {
+            keyFieldsStr = keyOrKlist;
+            keyFieldType = 'Primary Key';
+          }
+          break;
+        }
+      }
 
       if (!fileMap.has(fileName)) {
         fileMap.set(fileName, {
           fileName,
           purpose,
           accessType,
-          keyFields: keyFields.join(', ') || 'N/A'
+          keyFields: keyFieldsStr,
+          keyFieldType
         });
       }
     }
@@ -119,55 +248,27 @@ function extractFileOperations(lines) {
   return Array.from(fileMap.values());
 }
 
-function extractKeyFieldsForFile(lines, fileName) {
-  const keys = [];
-
-  for (const line of lines) {
-    // Look for KLIST definitions
-    const klistMatch = line.match(/C\s+(\w+)\s+KLIST/i);
-    if (klistMatch) {
-      const klistName = klistMatch[1];
-      // Look for KFLD entries following this KLIST
-      const kfldPattern = new RegExp(`C\\s+KFLD\\s+(\\w+)`, 'gi');
-      let match;
-      while ((match = kfldPattern.exec(line)) !== null) {
-        keys.push(match[1]);
-      }
-    }
-
-    // Look for CHAIN/SETLL operations with keys
-    const chainMatch = line.match(/C\s+(\w+)\s+CHAIN\s+(\w+)/i);
-    if (chainMatch && chainMatch[2] === fileName) {
-      keys.push(chainMatch[1]);
-    }
-  }
-
-  return [...new Set(keys)];
-}
-
-function extractMessages(lines, messageList) {
+function extractMessages(lines, messageMap) {
   const messages = [];
-  const msgMap = new Map();
+  const msgSet = new Set();
 
-  // Parse message list if provided
-  if (messageList) {
-    const msgLines = messageList.split('\n');
-    for (const line of msgLines) {
-      const match = line.match(/(\w+\d+)\s+\d+\s+(.+)/);
-      if (match) {
-        msgMap.set(match[1].trim(), match[2].trim());
-      }
-    }
-  }
-
-  // Find message IDs in RPG code
   for (const line of lines) {
-    const msgMatch = line.match(/(?:MSGID|MESSAGE)\s*\(?\s*'?([A-Z]{3}\d{4})'?\)?/i);
-    if (msgMatch) {
-      const msgId = msgMatch[1];
-      const msgText = msgMap.get(msgId) || 'Message text not found in message list';
-      if (!messages.find(m => m.id === msgId)) {
-        messages.push({ id: msgId, text: msgText });
+    // Match various message ID patterns
+    const patterns = [
+      /(?:MSGID|MESSAGE)\s*\(?\s*'?([A-Z]{3}\d{4})'?\)?/i,
+      /'([A-Z]{3}\d{4})'/,
+      /([A-Z]{3}\d{4})/
+    ];
+
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const msgId = match[1].toUpperCase();
+        if (msgId.match(/^[A-Z]{3}\d{4}$/) && !msgSet.has(msgId)) {
+          msgSet.add(msgId);
+          const msgText = messageMap.get(msgId) || 'Message text not found in message list';
+          messages.push({ id: msgId, text: msgText });
+        }
       }
     }
   }
@@ -182,29 +283,47 @@ function extractBusinessRules(lines) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Look for IF conditions
-    if (line.match(/C\s+IF\s+/i)) {
-      const condition = line.substring(line.indexOf('IF')).trim();
-      rules.push({
-        ruleName: `Business Rule ${ruleCounter++}`,
-        ruleDescription: `Conditional check: ${condition}`
-      });
+    // Skip error indicator management lines
+    if (line.match(/\*IN\d+|ERROR|SETON|SETOFF.*\d{2}/i) && !line.match(/IF|DOW|SELECT/i)) {
+      continue;
     }
 
-    // Look for DOW/DOU loops
-    if (line.match(/C\s+DOW\s+|C\s+DOU\s+/i)) {
-      const condition = line.substring(line.indexOf('DO')).trim();
+    // Look for IF conditions (business rules)
+    const ifMatch = line.match(/C\s+IF\s+(.+)/i);
+    if (ifMatch) {
+      const condition = ifMatch[1].replace(/;.*$/, '').trim();
+      if (!condition.match(/\*IN\d+/)) { // Exclude error indicators
+        rules.push({
+          ruleName: `Business Rule ${ruleCounter++}`,
+          ruleDescription: `Conditional check: ${condition}`
+        });
+      }
+    }
+
+    // Look for DOW/DOU loops (business logic)
+    const dowMatch = line.match(/C\s+(DOW|DOU)\s+(.+)/i);
+    if (dowMatch) {
+      const condition = dowMatch[2].replace(/;.*$/, '').trim();
       rules.push({
         ruleName: `Business Rule ${ruleCounter++}`,
         ruleDescription: `Loop condition: ${condition}`
       });
     }
 
-    // Look for SELECT/WHEN
+    // Look for SELECT/WHEN (business logic)
     if (line.match(/C\s+SELECT/i)) {
       rules.push({
         ruleName: `Business Rule ${ruleCounter++}`,
         ruleDescription: 'Selection structure for conditional processing'
+      });
+    }
+
+    // Screen Filter Rules - Look for screen field conditions
+    const screenFilterMatch = line.match(/C\s+IF\s+.*(?:SCREEN|DSPF|FMT).*[=<>]/i);
+    if (screenFilterMatch) {
+      rules.push({
+        ruleName: `Screen Filter Rule ${ruleCounter++}`,
+        ruleDescription: `Screen field filter: ${line.substring(line.indexOf('IF'))}`
       });
     }
   }
@@ -212,116 +331,44 @@ function extractBusinessRules(lines) {
   return rules;
 }
 
-function extractDependencies(lines, fileOps) {
-  const deps = new Set();
-
-  // Add all files as dependencies
-  fileOps.forEach(file => deps.add(`Database File: ${file.fileName}`));
-
-  // Look for CALL operations
-  for (const line of lines) {
-    const callMatch = line.match(/C\s+CALL\s+'?(\w+)'?/i);
-    if (callMatch) {
-      deps.add(`Program: ${callMatch[1]}`);
-    }
-
-    // Look for display files
-    const exfmtMatch = line.match(/C\s+EXFMT\s+(\w+)/i);
-    if (exfmtMatch) {
-      deps.add(`Display File: ${exfmtMatch[1]}`);
-    }
-  }
-
-  return Array.from(deps);
-}
-
-function extractValidations(lines, messages) {
-  const validations = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Look for field validations
-    if (line.match(/C\s+IF\s+.*=\s*['"]\s*['"]/i)) {
-      validations.push({
-        type: 'Empty Field Check',
-        description: 'Validates that required field is not empty',
-        messageId: messages.length > 0 ? messages[0].id : 'N/A'
-      });
-    }
-
-    // Look for numeric validations
-    if (line.match(/C\s+IF\s+.*>\s*\d+|C\s+IF\s+.*<\s*\d+/i)) {
-      validations.push({
-        type: 'Numeric Range Validation',
-        description: 'Validates numeric field within acceptable range',
-        messageId: messages.length > 0 ? messages[0].id : 'N/A'
-      });
-    }
-
-    // Look for existence checks
-    if (line.match(/C\s+CHAIN/i)) {
-      validations.push({
-        type: 'Record Existence Check',
-        description: 'Validates if record exists in database',
-        messageId: messages.length > 0 ? messages[0].id : 'N/A'
-      });
-    }
-  }
-
-  return validations;
-}
-
-function extractDataMappings(lines) {
-  const mappings = [];
-
-  for (const line of lines) {
-    // Look for MOVE/MOVEL operations
-    const moveMatch = line.match(/C\s+(?:MOVE|MOVEL|EVAL)\s+(\w+)\s+(\w+)/i);
-    if (moveMatch) {
-      mappings.push({
-        sourceField: moveMatch[1],
-        targetField: moveMatch[2],
-        targetFileName: 'Determined by context',
-        transformNotes: 'Direct assignment'
-      });
-    }
-
-    // Look for EVAL with expressions
-    const evalMatch = line.match(/C\s+EVAL\s+(\w+)\s*=\s*(.+)/i);
-    if (evalMatch) {
-      mappings.push({
-        sourceField: 'Calculated',
-        targetField: evalMatch[1],
-        targetFileName: 'Determined by context',
-        transformNotes: `Expression: ${evalMatch[2].trim()}`
-      });
-    }
-  }
-
-  return mappings;
-}
-
 function extractCallStack(lines) {
   const calls = [];
   let sequence = 1;
 
   for (const line of lines) {
+    // Exclude Command Execution, Help Processing, Exit Processing
+    if (line.match(/CMD|COMMAND|HELP|EXIT|F3|F12/i)) {
+      continue;
+    }
+
     const callMatch = line.match(/C\s+CALL\s+'?(\w+)'?/i);
     if (callMatch) {
+      const programName = callMatch[1];
+
+      // Extract parameters for this CALL
+      const params = [];
+      let j = lines.indexOf(line) + 1;
+      while (j < lines.length && lines[j].match(/C\s+PARM\s+(\w+)/i)) {
+        const parmMatch = lines[j].match(/C\s+PARM\s+(\w+)/i);
+        if (parmMatch) params.push(parmMatch[1]);
+        j++;
+      }
+
       calls.push({
         sequence: sequence++,
-        programName: callMatch[1],
-        description: 'Program call operation'
+        programName,
+        description: `Program call` + (params.length > 0 ? ` with parameters: ${params.join(', ')}` : ''),
+        parameters: params
       });
     }
 
     const exfmtMatch = line.match(/C\s+EXFMT\s+(\w+)/i);
-    if (exfmtMatch) {
+    if (exfmtMatch && !line.match(/HELP/i)) {
       calls.push({
         sequence: sequence++,
         programName: exfmtMatch[1],
-        description: 'Display file interaction'
+        description: 'Display file interaction',
+        parameters: []
       });
     }
   }
@@ -329,19 +376,197 @@ function extractCallStack(lines) {
   return calls;
 }
 
-function extractScreenActions(lines) {
-  const actions = [];
+function extractDependencies(lines, fileOps) {
+  const deps = new Set();
+
+  // Add all database files as dependencies (excluding help text)
+  fileOps.forEach(file => {
+    if (!file.fileName.match(/HELP|HLPTXT/i)) {
+      deps.add(`Database File: ${file.fileName}`);
+    }
+  });
+
+  // Look for CALL operations
+  for (const line of lines) {
+    if (line.match(/HELP|HLPTXT/i)) continue; // Exclude help text
+
+    const callMatch = line.match(/C\s+CALL\s+'?(\w+)'?/i);
+    if (callMatch) {
+      deps.add(`Program: ${callMatch[1]}`);
+    }
+
+    // Look for display files
+    const exfmtMatch = line.match(/C\s+EXFMT\s+(\w+)/i);
+    if (exfmtMatch && !exfmtMatch[1].match(/HELP/i)) {
+      deps.add(`Display File: ${exfmtMatch[1]}`);
+    }
+
+    // Look for message files
+    const msgFileMatch = line.match(/MSGF\((\w+)\)/i);
+    if (msgFileMatch) {
+      deps.add(`Message File: ${msgFileMatch[1]}`);
+    }
+  }
+
+  return Array.from(deps);
+}
+
+function extractValidations(lines, messageMap) {
+  const validations = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Look for field validations
+    if (line.match(/C\s+IF\s+.*=\s*['"][\s]*['"]/i)) {
+      const msgId = findNearestMessageId(lines, i);
+      const msgText = msgId ? messageMap.get(msgId) || '' : '';
+
+      validations.push({
+        type: 'Empty Field Check',
+        description: 'Validates that required field is not empty',
+        messageId: msgId || 'N/A',
+        messageText: msgText
+      });
+    }
+
+    // Look for numeric range validations
+    if (line.match(/C\s+IF\s+.*[><]=?\s*\d+/i)) {
+      const msgId = findNearestMessageId(lines, i);
+      const msgText = msgId ? messageMap.get(msgId) || '' : '';
+
+      validations.push({
+        type: 'Numeric Range Validation',
+        description: 'Validates numeric field within acceptable range',
+        messageId: msgId || 'N/A',
+        messageText: msgText
+      });
+    }
+
+    // Look for existence checks (CHAIN)
+    if (line.match(/C\s+.*CHAIN.*\s+\d{2}/i)) {
+      const msgId = findNearestMessageId(lines, i);
+      const msgText = msgId ? messageMap.get(msgId) || '' : '';
+
+      validations.push({
+        type: 'Record Existence Check',
+        description: 'Validates if record exists in database',
+        messageId: msgId || 'N/A',
+        messageText: msgText
+      });
+    }
+
+    // Look for message file references
+    if (line.match(/MSGF\((\w+)\)/i)) {
+      const msgFileMatch = line.match(/MSGF\((\w+)\)/i);
+      validations.push({
+        type: 'Message File Reference',
+        description: `Refer to message file: ${msgFileMatch[1]} for validation messages`,
+        messageId: 'See message file',
+        messageText: ''
+      });
+    }
+  }
+
+  return validations;
+}
+
+function findNearestMessageId(lines, startIndex) {
+  // Look ahead for message ID within next 5 lines
+  for (let i = startIndex; i < Math.min(startIndex + 5, lines.length); i++) {
+    const match = lines[i].match(/([A-Z]{3}\d{4})/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function extractDataMappings(lines) {
+  const mappings = [];
 
   for (const line of lines) {
-    // Look for option handling
-    if (line.match(/OPT|OPTION/i)) {
-      const actionMatch = line.match(/(?:OPT|OPTION)\s*=\s*['"]?(\w+)['"]?/i);
-      if (actionMatch) {
-        actions.push({
-          option: actionMatch[1],
-          description: `Process option: ${actionMatch[1]}`,
-          action: 'Determined by subsequent processing logic'
-        });
+    // Look for MOVE/MOVEL operations
+    const moveMatch = line.match(/C\s+(?:MOVE|MOVEL)\s+(\w+)\s+(\w+)/i);
+    if (moveMatch) {
+      mappings.push({
+        sourceField: moveMatch[1],
+        targetField: moveMatch[2],
+        targetFileName: 'Context dependent',
+        transformNotes: 'Direct assignment'
+      });
+    }
+
+    // Look for EVAL operations
+    const evalMatch = line.match(/C\s+EVAL\s+(\w+)\s*=\s*(.+)/i);
+    if (evalMatch) {
+      const expression = evalMatch[2].replace(/;.*$/, '').trim();
+      mappings.push({
+        sourceField: 'Calculated',
+        targetField: evalMatch[1],
+        targetFileName: 'Context dependent',
+        transformNotes: `Expression: ${expression}`
+      });
+    }
+
+    // Look for option processing (Edit/Delete/Print)
+    const optMatch = line.match(/C\s+SELECT/i);
+    if (optMatch) {
+      const nextLines = lines.slice(lines.indexOf(line), lines.indexOf(line) + 20);
+      const whenMatches = nextLines.filter(l => l.match(/C\s+WHEN\s+.*=\s*['"]([^'"]+)['"]/i));
+
+      whenMatches.forEach(wl => {
+        const wMatch = wl.match(/C\s+WHEN\s+.*=\s*['"]([^'"]+)['"]/i);
+        if (wMatch) {
+          mappings.push({
+            sourceField: 'User Option',
+            targetField: 'Action Code',
+            targetFileName: 'Screen Processing',
+            transformNotes: `Option '${wMatch[1]}' triggers specific action`
+          });
+        }
+      });
+    }
+  }
+
+  return mappings;
+}
+
+function extractScreenActions(lines) {
+  const actions = [];
+  const actionSet = new Set();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Look for option selection patterns
+    const optMatch = line.match(/WHEN\s+.*=\s*['"]([^'"]+)['"]/i);
+    if (optMatch) {
+      const option = optMatch[1];
+
+      if (!actionSet.has(option)) {
+        actionSet.add(option);
+
+        let description = '';
+        let action = '';
+
+        // Determine action type
+        if (option.match(/1|ADD|NEW/i)) {
+          description = 'Add new record';
+          action = 'Navigate to add screen, validate inputs, create new database record';
+        } else if (option.match(/2|EDIT|CHG|CHANGE/i)) {
+          description = 'Edit existing record';
+          action = 'Retrieve record, display in edit mode, validate changes, update database';
+        } else if (option.match(/3|DEL|DELETE/i)) {
+          description = 'Delete record';
+          action = 'Confirm deletion, validate no dependencies, remove record from database';
+        } else if (option.match(/4|5|PRINT|VIEW|DSP/i)) {
+          description = 'Print or display record';
+          action = 'Retrieve record details, format for output, send to printer or display';
+        } else {
+          description = `Process option: ${option}`;
+          action = 'Execute specific business logic for this option';
+        }
+
+        actions.push({ option, description, action });
       }
     }
   }
@@ -349,88 +574,200 @@ function extractScreenActions(lines) {
   return actions;
 }
 
-function generateDetailedProcessing(lines) {
+function generateDetailedProcessing(lines, messageMap) {
   const steps = [];
   let stepCounter = 1;
-  let currentSubroutine = null;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  // Look for subroutines
+  const subroutines = extractSubroutines(lines);
 
-    // Look for subroutines
-    const begSrMatch = line.match(/C\s+(\w+)\s+BEGSR/i);
-    if (begSrMatch) {
-      currentSubroutine = begSrMatch[1];
-      const pseudocode = generateSubroutinePseudocode(lines, i);
-      steps.push({
-        stepNumber: stepCounter++,
-        processName: currentSubroutine,
-        description: `Subroutine: ${currentSubroutine}`,
-        pseudocode
-      });
-    }
+  subroutines.forEach(sr => {
+    const pseudocode = generateSubroutinePseudocode(lines, sr.startLine, sr.name, messageMap);
+    steps.push({
+      stepNumber: stepCounter++,
+      processName: sr.name,
+      description: sr.description,
+      parameters: sr.parameters,
+      pseudocode
+    });
+  });
 
-    // Look for main processing logic
-    if (line.match(/C\s+READ\s+/i) && !currentSubroutine) {
-      steps.push({
-        stepNumber: stepCounter++,
-        processName: 'Main Read Loop',
-        description: 'Process records from file',
-        pseudocode: `FUNCTION main_read_loop()\n  READ file_record\n  WHILE NOT end_of_file\n    PROCESS record\n    READ next_record\n  END WHILE\nEND FUNCTION`
-      });
-    }
+  // Look for main processing
+  const mainProcessing = extractMainProcessing(lines, messageMap);
+  if (mainProcessing) {
+    steps.push({
+      stepNumber: stepCounter++,
+      processName: 'Main Processing',
+      description: 'Primary program logic execution',
+      parameters: [],
+      pseudocode: mainProcessing
+    });
   }
 
   // If no steps found, create a generic one
   if (steps.length === 0) {
     steps.push({
       stepNumber: 1,
-      processName: 'Main Processing',
-      description: 'Primary program logic',
-      pseudocode: `FUNCTION main_processing()\n  INITIALIZE program\n  PROCESS business logic\n  PERFORM cleanup\n  RETURN\nEND FUNCTION`
+      processName: 'Program Execution',
+      description: 'Main program logic',
+      parameters: [],
+      pseudocode: generateGenericPseudocode(lines, messageMap)
     });
   }
 
   return steps;
 }
 
-function generateSubroutinePseudocode(lines, startIndex) {
-  const pseudocodeLines = [];
-  pseudocodeLines.push('FUNCTION subroutine()');
+function extractSubroutines(lines) {
+  const subroutines = [];
 
-  let depth = 1;
-  for (let i = startIndex + 1; i < lines.length && depth > 0; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const begSrMatch = line.match(/C\s+(\w+)\s+BEGSR/i);
 
-    if (line.match(/C\s+ENDSR/i)) {
-      depth--;
-      if (depth === 0) break;
+    if (begSrMatch) {
+      const name = begSrMatch[1];
+
+      // Look for parameters in comments or PARM statements
+      const params = [];
+      for (let j = Math.max(0, i - 5); j < Math.min(i + 10, lines.length); j++) {
+        const parmMatch = lines[j].match(/PARM.*?(\w+)/i);
+        if (parmMatch) params.push(parmMatch[1]);
+      }
+
+      subroutines.push({
+        name,
+        startLine: i,
+        parameters: params,
+        description: `Subroutine: ${name}` + (params.length > 0 ? ` (Parameters: ${params.join(', ')})` : '')
+      });
     }
-
-    // Simplify the line for pseudocode
-    if (line.match(/C\s+IF\s+/i)) {
-      pseudocodeLines.push('  IF condition THEN');
-    } else if (line.match(/C\s+ELSE/i)) {
-      pseudocodeLines.push('  ELSE');
-    } else if (line.match(/C\s+ENDIF/i)) {
-      pseudocodeLines.push('  END IF');
-    } else if (line.match(/C\s+DOW\s+/i)) {
-      pseudocodeLines.push('  WHILE condition DO');
-    } else if (line.match(/C\s+ENDDO/i)) {
-      pseudocodeLines.push('  END WHILE');
-    } else if (line.match(/C\s+EVAL\s+/i)) {
-      pseudocodeLines.push('  ASSIGN value');
-    } else if (line.match(/C\s+CHAIN/i)) {
-      pseudocodeLines.push('  READ record by key');
-    } else if (line.match(/C\s+UPDATE/i)) {
-      pseudocodeLines.push('  UPDATE record');
-    }
-
-    if (pseudocodeLines.length > 15) break; // Keep it concise
   }
 
-  pseudocodeLines.push('END FUNCTION');
-  return pseudocodeLines.join('\n');
+  return subroutines;
+}
+
+function generateSubroutinePseudocode(lines, startIndex, name, messageMap) {
+  const pseudoLines = [];
+  const paramList = extractSubroutineParams(lines, startIndex);
+
+  pseudoLines.push(`FUNCTION ${name}(${paramList.join(', ')})`);
+
+  let lineCount = 0;
+  const maxLines = 60; // Keep under 70 lines
+
+  for (let i = startIndex + 1; i < lines.length && lineCount < maxLines; i++) {
+    const line = lines[i];
+
+    if (line.match(/C\s+ENDSR/i)) break;
+
+    // Convert RPG operations to pseudocode
+    if (line.match(/C\s+IF\s+(.+)/i)) {
+      const match = line.match(/C\s+IF\s+(.+)/i);
+      pseudoLines.push(`  IF ${match[1].replace(/;.*$/, '').trim()} THEN`);
+      lineCount++;
+    } else if (line.match(/C\s+ELSE/i)) {
+      pseudoLines.push('  ELSE');
+      lineCount++;
+    } else if (line.match(/C\s+ENDIF/i)) {
+      pseudoLines.push('  END IF');
+      lineCount++;
+    } else if (line.match(/C\s+DOW\s+(.+)/i)) {
+      const match = line.match(/C\s+DOW\s+(.+)/i);
+      pseudoLines.push(`  WHILE ${match[1].replace(/;.*$/, '').trim()} DO`);
+      lineCount++;
+    } else if (line.match(/C\s+ENDDO/i)) {
+      pseudoLines.push('  END WHILE');
+      lineCount++;
+    } else if (line.match(/C\s+EVAL\s+(.+)/i)) {
+      const match = line.match(/C\s+EVAL\s+(.+)/i);
+      pseudoLines.push(`  ${match[1].replace(/;.*$/, '').trim()}`);
+      lineCount++;
+    } else if (line.match(/C\s+(\w+)\s+CHAIN\s+(\w+)/i)) {
+      const match = line.match(/C\s+(\w+)\s+CHAIN\s+(\w+)/i);
+      pseudoLines.push(`  READ ${match[2]} WHERE key = ${match[1]}`);
+      lineCount++;
+    } else if (line.match(/C\s+UPDATE\s+(\w+)/i)) {
+      const match = line.match(/C\s+UPDATE\s+(\w+)/i);
+      pseudoLines.push(`  UPDATE ${match[1]} record`);
+      lineCount++;
+    } else if (line.match(/C\s+WRITE\s+(\w+)/i)) {
+      const match = line.match(/C\s+WRITE\s+(\w+)/i);
+      pseudoLines.push(`  INSERT INTO ${match[1]}`);
+      lineCount++;
+    } else if (line.match(/C\s+DELETE\s+(\w+)/i)) {
+      const match = line.match(/C\s+DELETE\s+(\w+)/i);
+      pseudoLines.push(`  DELETE FROM ${match[1]}`);
+      lineCount++;
+    } else if (line.match(/([A-Z]{3}\d{4})/)) {
+      const msgMatch = line.match(/([A-Z]{3}\d{4})/);
+      const msgId = msgMatch[1];
+      const msgText = messageMap.get(msgId) || 'See message list';
+      pseudoLines.push(`  DISPLAY MESSAGE ${msgId}: "${msgText}"`);
+      lineCount++;
+    }
+  }
+
+  pseudoLines.push('END FUNCTION');
+
+  return pseudoLines.join('\n');
+}
+
+function extractSubroutineParams(lines, startIndex) {
+  const params = [];
+
+  // Look backward and forward for parameters
+  for (let i = Math.max(0, startIndex - 10); i < Math.min(startIndex + 10, lines.length); i++) {
+    const parmMatch = lines[i].match(/C\s+PARM\s+(\w+)/i);
+    if (parmMatch && !params.includes(parmMatch[1])) {
+      params.push(parmMatch[1]);
+    }
+  }
+
+  return params;
+}
+
+function extractMainProcessing(lines, messageMap) {
+  const pseudoLines = [];
+  let foundMain = false;
+
+  for (const line of lines) {
+    if (line.match(/C\s+READ\s+(\w+)/i) && !line.match(/BEGSR/i)) {
+      foundMain = true;
+      const match = line.match(/C\s+READ\s+(\w+)/i);
+      pseudoLines.push(`READ ${match[1]}`);
+      pseudoLines.push('WHILE NOT end_of_file');
+      pseudoLines.push('  PROCESS current_record');
+      pseudoLines.push(`  READ next_record FROM ${match[1]}`);
+      pseudoLines.push('END WHILE');
+      break;
+    }
+  }
+
+  return foundMain ? pseudoLines.join('\n') : null;
+}
+
+function generateGenericPseudocode(lines, messageMap) {
+  return `FUNCTION main_program()
+  // Initialize program variables
+  CALL initialization_routine()
+
+  // Process main business logic
+  WHILE more_records_to_process
+    READ input_record
+    VALIDATE record_fields
+    IF validation_passed THEN
+      PERFORM business_calculations
+      UPDATE database_records
+    ELSE
+      DISPLAY error_message
+    END IF
+  END WHILE
+
+  // Cleanup and exit
+  CALL cleanup_routine()
+  RETURN success_status
+END FUNCTION`;
 }
 
 function formatDocumentation(data) {
@@ -451,13 +788,15 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n';
   doc += 'SECTION 1 - PROGRAM OVERVIEW\n';
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
-  doc += `Program Name: ${data.programName}\n`;
-  doc += 'Program Type: Interactive/Batch Processing\n';
-  doc += 'Purpose: Process business logic and maintain database records\n\n';
+  doc += `Program: ${data.programName}\n`;
+  doc += `Type: ${data.programType}\n`;
+  doc += `Purpose: Process business logic and maintain database records\n`;
+  doc += `Input: ${data.programInput}\n`;
+  doc += `Output: ${data.programOutput}\n\n`;
   doc += 'High-Level Logic:\n';
   doc += 'This RPG program processes business transactions by reading input data,\n';
   doc += 'performing validations, executing business rules, and updating database files.\n';
-  doc += 'The program interacts with users through display files and maintains data integrity.\n\n';
+  doc += 'The program maintains data integrity and provides user feedback through messages.\n\n';
 
   // Section 2 - File Operations
   doc += '═══════════════════════════════════════════════════════════════════════\n';
@@ -465,15 +804,15 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.fileOps.length > 0) {
-    doc += '┌──────────────┬──────────────┬─────────────┬────────────────────────┐\n';
-    doc += '│ File Name    │ Purpose      │ Access Type │ Key Fields             │\n';
-    doc += '├──────────────┼──────────────┼─────────────┼────────────────────────┤\n';
+    doc += '┌─────────────┬─────────────┬─────────────┬──────────────────┬──────────────┐\n';
+    doc += '│ File Name   │ Purpose     │ Access Type │ Key Fields       │ Key Type     │\n';
+    doc += '├─────────────┼─────────────┼─────────────┼──────────────────┼──────────────┤\n';
 
     data.fileOps.forEach(file => {
-      doc += `│ ${padRight(file.fileName, 12)} │ ${padRight(file.purpose, 12)} │ ${padRight(file.accessType, 11)} │ ${padRight(file.keyFields, 22)} │\n`;
+      doc += `│ ${padRight(file.fileName, 11)} │ ${padRight(file.purpose, 11)} │ ${padRight(file.accessType, 11)} │ ${padRight(file.keyFields, 16)} │ ${padRight(file.keyFieldType, 12)} │\n`;
     });
 
-    doc += '└──────────────┴──────────────┴─────────────┴────────────────────────┘\n\n';
+    doc += '└─────────────┴─────────────┴─────────────┴──────────────────┴──────────────┘\n\n';
   } else {
     doc += 'No file operations detected.\n\n';
   }
@@ -484,10 +823,15 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.businessRules.length > 0) {
+    doc += '┌────────────────────────┬────────────────────────────────────────────┐\n';
+    doc += '│ Rule Name              │ Rule Description                           │\n';
+    doc += '├────────────────────────┼────────────────────────────────────────────┤\n';
+
     data.businessRules.forEach(rule => {
-      doc += `• ${rule.ruleName}\n`;
-      doc += `  ${rule.ruleDescription}\n\n`;
+      doc += `│ ${padRight(rule.ruleName, 22)} │ ${padRight(rule.ruleDescription, 42)} │\n`;
     });
+
+    doc += '└────────────────────────┴────────────────────────────────────────────┘\n\n';
   } else {
     doc += 'No explicit business rules detected.\n\n';
   }
@@ -499,9 +843,13 @@ function formatDocumentation(data) {
 
   if (data.callStack.length > 0) {
     data.callStack.forEach(call => {
-      doc += `${call.sequence}. ${call.programName} - ${call.description}\n`;
+      doc += `${call.sequence}. ${call.programName}\n`;
+      doc += `   ${call.description}\n`;
+      if (call.parameters && call.parameters.length > 0) {
+        doc += `   Parameters: ${call.parameters.join(', ')}\n`;
+      }
+      doc += '\n';
     });
-    doc += '\n';
   } else {
     doc += 'No program calls detected.\n\n';
   }
@@ -529,7 +877,8 @@ function formatDocumentation(data) {
     data.screenActions.forEach(action => {
       doc += `Option: ${action.option}\n`;
       doc += `Description: ${action.description}\n`;
-      doc += `Action: ${action.action}\n\n`;
+      doc += `Action: ${action.action}\n`;
+      doc += '-'.repeat(70) + '\n\n';
     });
   } else {
     doc += 'No screen actions detected.\n\n';
@@ -544,7 +893,11 @@ function formatDocumentation(data) {
     data.validations.forEach(val => {
       doc += `Validation Type: ${val.type}\n`;
       doc += `Description: ${val.description}\n`;
-      doc += `Message ID: ${val.messageId}\n\n`;
+      doc += `Message ID: ${val.messageId}\n`;
+      if (val.messageText) {
+        doc += `Message Text: ${val.messageText}\n`;
+      }
+      doc += '\n';
     });
   } else {
     doc += 'No validations detected.\n\n';
@@ -556,15 +909,15 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.dataMappings.length > 0) {
-    doc += '┌─────────────────┬─────────────────┬─────────────────┬──────────────────────┐\n';
-    doc += '│ Source Field    │ Target Field    │ Target File     │ Transform Notes      │\n';
-    doc += '├─────────────────┼─────────────────┼─────────────────┼──────────────────────┤\n';
+    doc += '┌──────────────────┬──────────────────┬──────────────────┬───────────────────┐\n';
+    doc += '│ Source Field     │ Target Field     │ Target File      │ Transform Notes   │\n';
+    doc += '├──────────────────┼──────────────────┼──────────────────┼───────────────────┤\n';
 
     data.dataMappings.forEach(mapping => {
-      doc += `│ ${padRight(mapping.sourceField, 15)} │ ${padRight(mapping.targetField, 15)} │ ${padRight(mapping.targetFileName, 15)} │ ${padRight(mapping.transformNotes, 20)} │\n`;
+      doc += `│ ${padRight(mapping.sourceField, 16)} │ ${padRight(mapping.targetField, 16)} │ ${padRight(mapping.targetFileName, 16)} │ ${padRight(mapping.transformNotes, 17)} │\n`;
     });
 
-    doc += '└─────────────────┴─────────────────┴─────────────────┴──────────────────────┘\n\n';
+    doc += '└──────────────────┴──────────────────┴──────────────────┴───────────────────┘\n\n';
   } else {
     doc += 'No data mappings detected.\n\n';
   }
@@ -591,8 +944,11 @@ function formatDocumentation(data) {
   data.detailedProcessing.forEach(step => {
     doc += `Step ${step.stepNumber}: ${step.processName}\n`;
     doc += `${'-'.repeat(70)}\n`;
-    doc += `${step.description}\n\n`;
-    doc += 'Pseudocode:\n';
+    doc += `Description: ${step.description}\n`;
+    if (step.parameters && step.parameters.length > 0) {
+      doc += `Parameters: ${step.parameters.join(', ')}\n`;
+    }
+    doc += '\nPseudocode:\n';
     doc += '```\n';
     doc += step.pseudocode;
     doc += '\n```\n\n';
@@ -600,6 +956,7 @@ function formatDocumentation(data) {
 
   doc += '═══════════════════════════════════════════════════════════════════════\n';
   doc += 'END OF DOCUMENTATION\n';
+  doc += 'Generated by Seaboard Marine RPG Documentation Generator\n';
   doc += '═══════════════════════════════════════════════════════════════════════\n';
 
   return doc;
@@ -607,11 +964,11 @@ function formatDocumentation(data) {
 
 function padRight(str, length) {
   str = String(str);
+  if (str.length > length) {
+    return str.substring(0, length - 2) + '..';
+  }
   while (str.length < length) {
     str += ' ';
-  }
-  if (str.length > length) {
-    str = str.substring(0, length - 3) + '...';
   }
   return str;
 }
