@@ -798,12 +798,40 @@ function formatDocumentation(data) {
   doc += 'performing validations, executing business rules, and updating database files.\n';
   doc += 'The program maintains data integrity and provides user feedback through messages.\n\n';
 
+  doc += 'High-Level Program Flow Pseudocode:\n';
+  doc += '```\n';
+  doc += 'PROGRAM ' + data.programName + '\n';
+  doc += '  // Initialize program\n';
+  doc += '  DECLARE variables and files\n';
+  doc += '  OPEN database files\n';
+  if (data.programType.includes('Screen')) {
+    doc += '  OPEN display files\n';
+  }
+  doc += '\n';
+  doc += '  // Main processing\n';
+  if (data.programType.includes('Screen')) {
+    doc += '  DISPLAY screen to user\n';
+    doc += '  GET user input\n';
+  }
+  doc += '  VALIDATE input data\n';
+  doc += '  EXECUTE business rules\n';
+  doc += '  PROCESS database operations\n';
+  doc += '\n';
+  doc += '  // Cleanup\n';
+  doc += '  CLOSE all files\n';
+  doc += '  RETURN control\n';
+  doc += 'END PROGRAM\n';
+  doc += '```\n\n';
+
   // Section 2 - File Operations
   doc += '═══════════════════════════════════════════════════════════════════════\n';
   doc += 'SECTION 2 - FILE OPERATIONS\n';
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.fileOps.length > 0) {
+    doc += 'Explanation: The program accesses the following database and display files.\n';
+    doc += 'Files with keyed access use specific key fields for random record retrieval.\n\n';
+
     doc += '┌─────────────┬─────────────┬─────────────┬──────────────────┬──────────────┐\n';
     doc += '│ File Name   │ Purpose     │ Access Type │ Key Fields       │ Key Type     │\n';
     doc += '├─────────────┼─────────────┼─────────────┼──────────────────┼──────────────┤\n';
@@ -813,6 +841,29 @@ function formatDocumentation(data) {
     });
 
     doc += '└─────────────┴─────────────┴─────────────┴──────────────────┴──────────────┘\n\n';
+
+    doc += 'File Access Pseudocode:\n';
+    doc += '```\n';
+    data.fileOps.forEach(file => {
+      doc += `// File: ${file.fileName} (${file.purpose})\n`;
+      if (file.accessType === 'Keyed') {
+        doc += `OPEN ${file.fileName} FOR keyed_access\n`;
+        if (file.keyFields !== 'N/A') {
+          doc += `READ ${file.fileName} WHERE key = (${file.keyFields})\n`;
+        }
+      } else {
+        doc += `OPEN ${file.fileName} FOR sequential_access\n`;
+        doc += `READ ${file.fileName} sequentially\n`;
+      }
+      if (file.purpose.includes('Update')) {
+        doc += `UPDATE ${file.fileName} SET field = value\n`;
+      }
+      if (file.purpose.includes('Output')) {
+        doc += `WRITE new_record TO ${file.fileName}\n`;
+      }
+      doc += '\n';
+    });
+    doc += '```\n\n';
   } else {
     doc += 'No file operations detected.\n\n';
   }
@@ -823,6 +874,9 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.businessRules.length > 0) {
+    doc += 'Explanation: These rules enforce business logic and control program flow.\n';
+    doc += 'Rules are evaluated during processing to ensure data integrity and correct operations.\n\n';
+
     doc += '┌────────────────────────┬────────────────────────────────────────────┐\n';
     doc += '│ Rule Name              │ Rule Description                           │\n';
     doc += '├────────────────────────┼────────────────────────────────────────────┤\n';
@@ -832,6 +886,32 @@ function formatDocumentation(data) {
     });
 
     doc += '└────────────────────────┴────────────────────────────────────────────┘\n\n';
+
+    doc += 'Business Rules Execution Pseudocode:\n';
+    doc += '```\n';
+    doc += 'FUNCTION apply_business_rules()\n';
+    data.businessRules.forEach((rule, index) => {
+      if (index < 5) { // Show first 5 rules as examples
+        if (rule.ruleDescription.includes('Conditional check')) {
+          doc += `  IF ${rule.ruleDescription.replace('Conditional check: ', '')} THEN\n`;
+          doc += `    EXECUTE appropriate_action()\n`;
+          doc += `  END IF\n`;
+        } else if (rule.ruleDescription.includes('Loop condition')) {
+          doc += `  WHILE ${rule.ruleDescription.replace('Loop condition: ', '')} DO\n`;
+          doc += `    PROCESS records\n`;
+          doc += `  END WHILE\n`;
+        } else if (rule.ruleDescription.includes('Screen field filter')) {
+          doc += `  FILTER screen_fields WHERE ${rule.ruleDescription.replace('Screen field filter: ', '')}\n`;
+        } else {
+          doc += `  APPLY ${rule.ruleName}\n`;
+        }
+      }
+    });
+    if (data.businessRules.length > 5) {
+      doc += `  // ... ${data.businessRules.length - 5} more business rules\n`;
+    }
+    doc += 'END FUNCTION\n';
+    doc += '```\n\n';
   } else {
     doc += 'No explicit business rules detected.\n\n';
   }
@@ -874,12 +954,33 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.screenActions.length > 0) {
+    doc += 'Explanation: User selects an option from the screen menu.\n';
+    doc += 'Each option triggers specific processing logic as detailed below.\n\n';
+
     data.screenActions.forEach(action => {
       doc += `Option: ${action.option}\n`;
       doc += `Description: ${action.description}\n`;
       doc += `Action: ${action.action}\n`;
       doc += '-'.repeat(70) + '\n\n';
     });
+
+    doc += 'Screen Action Processing Pseudocode:\n';
+    doc += '```\n';
+    doc += 'FUNCTION process_screen_action(user_option)\n';
+    doc += '  SELECT CASE user_option\n';
+    data.screenActions.forEach(action => {
+      doc += `    WHEN '${action.option}':\n`;
+      const actionSteps = action.action.split(',');
+      actionSteps.forEach(step => {
+        doc += `      ${step.trim()}\n`;
+      });
+      doc += '\n';
+    });
+    doc += '    WHEN OTHER:\n';
+    doc += '      DISPLAY "Invalid option selected"\n';
+    doc += '  END SELECT\n';
+    doc += 'END FUNCTION\n';
+    doc += '```\n\n';
   } else {
     doc += 'No screen actions detected.\n\n';
   }
@@ -890,6 +991,9 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.validations.length > 0) {
+    doc += 'Explanation: The program performs various validations to ensure data integrity.\n';
+    doc += 'Each validation failure triggers an appropriate error message to the user.\n\n';
+
     data.validations.forEach(val => {
       doc += `Validation Type: ${val.type}\n`;
       doc += `Description: ${val.description}\n`;
@@ -899,6 +1003,51 @@ function formatDocumentation(data) {
       }
       doc += '\n';
     });
+
+    doc += 'Validation Logic Pseudocode:\n';
+    doc += '```\n';
+    doc += 'FUNCTION perform_validations()\n';
+    data.validations.forEach((val, index) => {
+      if (index < 5) { // Show first 5 validations
+        if (val.type === 'Empty Field Check') {
+          doc += '  IF input_field IS EMPTY THEN\n';
+          if (val.messageId && val.messageId !== 'N/A') {
+            doc += `    DISPLAY "${val.messageId}: ${val.messageText || 'Field is required'}"\n`;
+          } else {
+            doc += '    DISPLAY "Field is required"\n';
+          }
+          doc += '    RETURN validation_failed\n';
+          doc += '  END IF\n\n';
+        } else if (val.type === 'Numeric Range Validation') {
+          doc += '  IF numeric_field < minimum OR numeric_field > maximum THEN\n';
+          if (val.messageId && val.messageId !== 'N/A') {
+            doc += `    DISPLAY "${val.messageId}: ${val.messageText || 'Value out of range'}"\n`;
+          } else {
+            doc += '    DISPLAY "Value out of range"\n';
+          }
+          doc += '    RETURN validation_failed\n';
+          doc += '  END IF\n\n';
+        } else if (val.type === 'Record Existence Check') {
+          doc += '  READ database_record WHERE key = search_key\n';
+          doc += '  IF record_not_found THEN\n';
+          if (val.messageId && val.messageId !== 'N/A') {
+            doc += `    DISPLAY "${val.messageId}: ${val.messageText || 'Record not found'}"\n`;
+          } else {
+            doc += '    DISPLAY "Record not found"\n';
+          }
+          doc += '    RETURN validation_failed\n';
+          doc += '  END IF\n\n';
+        } else if (val.type === 'Message File Reference') {
+          doc += `  // Refer to message file: ${val.description}\n\n`;
+        }
+      }
+    });
+    if (data.validations.length > 5) {
+      doc += `  // ... ${data.validations.length - 5} more validations\n\n`;
+    }
+    doc += '  RETURN validation_passed\n';
+    doc += 'END FUNCTION\n';
+    doc += '```\n\n';
   } else {
     doc += 'No validations detected.\n\n';
   }
@@ -909,6 +1058,9 @@ function formatDocumentation(data) {
   doc += '═══════════════════════════════════════════════════════════════════════\n\n';
 
   if (data.dataMappings.length > 0) {
+    doc += 'Explanation: Data is transferred between files and fields using the following mappings.\n';
+    doc += 'Transformations may include calculations, formatting, or conditional logic.\n\n';
+
     doc += '┌──────────────────┬──────────────────┬──────────────────┬───────────────────┐\n';
     doc += '│ Source Field     │ Target Field     │ Target File      │ Transform Notes   │\n';
     doc += '├──────────────────┼──────────────────┼──────────────────┼───────────────────┤\n';
@@ -918,6 +1070,30 @@ function formatDocumentation(data) {
     });
 
     doc += '└──────────────────┴──────────────────┴──────────────────┴───────────────────┘\n\n';
+
+    doc += 'Data Mapping Pseudocode:\n';
+    doc += '```\n';
+    doc += 'FUNCTION map_data()\n';
+    data.dataMappings.forEach((mapping, index) => {
+      if (index < 5) { // Show first 5 mappings
+        if (mapping.transformNotes.includes('Direct assignment')) {
+          doc += `  ${mapping.targetField} = ${mapping.sourceField}  // ${mapping.transformNotes}\n`;
+        } else if (mapping.transformNotes.includes('Expression')) {
+          doc += `  ${mapping.targetField} = ${mapping.transformNotes.replace('Expression: ', '')}  // Calculated\n`;
+        } else if (mapping.transformNotes.includes('Option')) {
+          doc += `  IF user_option = '${mapping.transformNotes}' THEN\n`;
+          doc += `    ${mapping.targetField} = action_code\n`;
+          doc += `  END IF\n`;
+        } else {
+          doc += `  ${mapping.targetField} = TRANSFORM(${mapping.sourceField})  // ${mapping.transformNotes}\n`;
+        }
+      }
+    });
+    if (data.dataMappings.length > 5) {
+      doc += `  // ... ${data.dataMappings.length - 5} more data mappings\n`;
+    }
+    doc += 'END FUNCTION\n';
+    doc += '```\n\n';
   } else {
     doc += 'No data mappings detected.\n\n';
   }
