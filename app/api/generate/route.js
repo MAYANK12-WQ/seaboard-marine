@@ -203,7 +203,8 @@ function extractFileOperations(lines) {
       else if (fileSpec.includes('OUTPUT') || fileSpec.includes(' O ')) purpose = 'Output';
       else if (fileSpec.includes('IF')) purpose = 'Input';
 
-      const accessType = fileSpec.includes('KEYED') ? 'Keyed' : 'Sequential';
+      // Check for K flag in F-spec (e.g., "FCUSTMAST  UF   E           K DISK")
+      const accessType = (fileSpec.includes(' K ') || fileSpec.includes('\tK\t') || line.match(/\s+K\s+DISK/i)) ? 'Keyed' : 'Sequential';
 
       // Find key fields for this file
       let keyFieldsStr = 'N/A';
@@ -216,21 +217,38 @@ function extractFileOperations(lines) {
         keyFieldType = numKeys > 1 ? 'Composite Key' : 'Primary Key';
       }
 
-      // Check if file is used with KLIST
+      // Check ALL file usages and prefer KLIST (composite keys) over simple keys
+      let foundSimpleKey = null;
+      let foundCompositeKey = null;
+
       for (let i = 0; i < lines.length; i++) {
         const chainMatch = lines[i].match(/C\s+(\w+)\s+(?:CHAIN|SETLL|READE|SETGT)\s+(\w+)/i);
         if (chainMatch && chainMatch[2] === fileName) {
           const keyOrKlist = chainMatch[1];
           if (klistMap.has(keyOrKlist)) {
+            // Found KLIST - composite key (prefer this)
             const keys = klistMap.get(keyOrKlist);
-            keyFieldsStr = keys.join(' + ');
-            keyFieldType = keys.length > 1 ? 'Composite Key' : 'Primary Key';
-          } else {
-            keyFieldsStr = keyOrKlist;
-            keyFieldType = 'Primary Key';
+            foundCompositeKey = {
+              keyFieldsStr: keys.join(' + '),
+              keyFieldType: keys.length > 1 ? 'Composite Key' : 'Primary Key'
+            };
+          } else if (!foundSimpleKey) {
+            // Found simple key (only use if no KLIST found)
+            foundSimpleKey = {
+              keyFieldsStr: keyOrKlist,
+              keyFieldType: 'Primary Key'
+            };
           }
-          break;
         }
+      }
+
+      // Prefer composite key over simple key
+      if (foundCompositeKey) {
+        keyFieldsStr = foundCompositeKey.keyFieldsStr;
+        keyFieldType = foundCompositeKey.keyFieldType;
+      } else if (foundSimpleKey) {
+        keyFieldsStr = foundSimpleKey.keyFieldsStr;
+        keyFieldType = foundSimpleKey.keyFieldType;
       }
 
       if (!fileMap.has(fileName)) {
