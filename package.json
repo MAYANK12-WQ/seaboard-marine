@@ -1,0 +1,19 @@
+{
+  "name": "seaboard-marine",
+  "version": "1.0.0",
+  "description": "RPG to Reverse Engineering Document Generator for Seaboard Marine",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "keywords": ["RPG", "AS400", "Documentation", "Reverse Engineering"],
+  "author": "Seaboard Marine",
+  "license": "ISC",
+  "dependencies": {
+    "next": "^16.0.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
