@@ -10,6 +10,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState({ rpg: 0, msg: 0 });
   const [processingOCR, setProcessingOCR] = useState({ rpg: false, msg: false });
+  const [uploadedFiles, setUploadedFiles] = useState({ rpg: null, msg: null });
 
   const processImage = async (file, type) => {
     if (!file) return;
@@ -44,11 +45,13 @@ export default function Home() {
 
       if (type === 'rpg') {
         setRpgCode(extractedText);
+        setUploadedFiles(prev => ({ ...prev, rpg: file.name }));
       } else {
         setMessageList(extractedText);
+        setUploadedFiles(prev => ({ ...prev, msg: file.name }));
       }
 
-      alert(`✅ Image processed successfully! Text extracted and populated.`);
+      alert(`✅ Image processed successfully!\nFile: ${file.name}\nText extracted and ready for code generation.`);
     } catch (error) {
       alert('Error processing image: ' + error.message);
     } finally {
@@ -66,7 +69,7 @@ export default function Home() {
 
   const generateDocumentation = async () => {
     if (!rpgCode.trim()) {
-      alert('Please enter RPG code or upload an image');
+      alert('Please upload an image of RPG code first');
       return;
     }
 
@@ -90,7 +93,7 @@ export default function Home() {
       if (response.ok) {
         setDocumentation(data.documentation);
       } else {
-        alert('Error: ' + (data.error || 'Failed to generate documentation'));
+        alert('Error: ' + (data.error || 'Failed to generate code'));
       }
     } catch (error) {
       alert('Error: ' + error.message);
@@ -143,19 +146,11 @@ export default function Home() {
               <label htmlFor="rpgImageUpload" className="upload-button">
                 {processingOCR.rpg
                   ? `🔄 Processing... ${ocrProgress.rpg}%`
+                  : uploadedFiles.rpg
+                  ? `✅ ${uploadedFiles.rpg} - Click to change`
                   : '📸 Upload Image of RPG Code'}
               </label>
             </div>
-
-            <textarea
-              id="rpgCode"
-              value={rpgCode}
-              onChange={(e) => setRpgCode(e.target.value)}
-              placeholder="Paste your RPG program code here or upload an image above..."
-              className="textarea"
-              rows={12}
-              disabled={processingOCR.rpg}
-            />
           </div>
 
           <div className="form-group">
@@ -176,27 +171,19 @@ export default function Home() {
               <label htmlFor="msgImageUpload" className="upload-button">
                 {processingOCR.msg
                   ? `🔄 Processing... ${ocrProgress.msg}%`
+                  : uploadedFiles.msg
+                  ? `✅ ${uploadedFiles.msg} - Click to change`
                   : '📸 Upload Image of Message List'}
               </label>
             </div>
-
-            <textarea
-              id="messageList"
-              value={messageList}
-              onChange={(e) => setMessageList(e.target.value)}
-              placeholder="Paste your message list here or upload an image above..."
-              className="textarea"
-              rows={8}
-              disabled={processingOCR.msg}
-            />
           </div>
 
           <button
             onClick={generateDocumentation}
-            disabled={loading || processingOCR.rpg || processingOCR.msg}
+            disabled={loading || processingOCR.rpg || processingOCR.msg || !rpgCode}
             className="btn-primary"
           >
-            {loading ? '⏳ Generating Documentation...' : '📄 Generate Documentation'}
+            {loading ? '⏳ Generating Code...' : '📄 Generate Code'}
           </button>
         </div>
 
