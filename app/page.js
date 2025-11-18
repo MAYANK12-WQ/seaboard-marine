@@ -128,6 +128,7 @@ export default function Home() {
 
       <div className="content">
         <div className="input-section">
+          {/* RPG Code - Upload Only */}
           <div className="form-group">
             <label htmlFor="rpgCode">
               <strong>RPG Program Code</strong>
@@ -153,6 +154,7 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Message List - Upload OR Type */}
           <div className="form-group">
             <label htmlFor="messageList">
               <strong>Message List</strong>
@@ -173,9 +175,19 @@ export default function Home() {
                   ? `🔄 Processing... ${ocrProgress.msg}%`
                   : uploadedFiles.msg
                   ? `✅ ${uploadedFiles.msg} - Click to change`
-                  : '📸 Upload Image of Message List'}
+                  : '📸 Upload Image of Message List (Optional)'}
               </label>
             </div>
+
+            <textarea
+              id="messageList"
+              value={messageList}
+              onChange={(e) => setMessageList(e.target.value)}
+              placeholder="Or paste your message list here..."
+              className="textarea"
+              rows={8}
+              disabled={processingOCR.msg}
+            />
           </div>
 
           <button
