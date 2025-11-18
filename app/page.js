@@ -183,7 +183,7 @@ export default function Home() {
               id="messageList"
               value={messageList}
               onChange={(e) => setMessageList(e.target.value)}
-              placeholder="Or paste your message list here..."
+              placeholder="Paste message list here OR type custom instructions (e.g., 'Add more security details', 'Include error handling examples')..."
               className="textarea"
               rows={8}
               disabled={processingOCR.msg}

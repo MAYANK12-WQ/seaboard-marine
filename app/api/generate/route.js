@@ -26,8 +26,8 @@ export async function POST(request) {
 function generateRPGDocumentation(rpgCode, messageList) {
   const lines = rpgCode.split('\n');
 
-  // Parse message list first for use throughout
-  const messageMap = parseMessageList(messageList);
+  // Parse message list first for use throughout (supports both message lists AND custom prompts)
+  const { messageMap, customPrompt, isPrompt } = parseMessageListOrPrompt(messageList);
 
   // Extract program metadata
   const programName = extractProgramName(lines);
@@ -76,25 +76,41 @@ function generateRPGDocumentation(rpgCode, messageList) {
     validations,
     dataMappings,
     messages,
-    detailedProcessing
+    detailedProcessing,
+    customPrompt,
+    isPrompt
   });
 }
 
-function parseMessageList(messageList) {
+function parseMessageListOrPrompt(messageList) {
   const msgMap = new Map();
+  let customPrompt = '';
+  let isPrompt = false;
 
-  if (!messageList) return msgMap;
+  if (!messageList || !messageList.trim()) {
+    return { messageMap: msgMap, customPrompt: '', isPrompt: false };
+  }
 
   const lines = messageList.split('\n');
+  let messageIdCount = 0;
+
+  // First pass: check if this looks like a message list or a prompt
   for (const line of lines) {
-    // Match format: MSGID SEV MESSAGE (with optional line numbers, arrows, and / separator)
     const match = line.match(/([A-Z]{3}\d{4})\s+\d+\s+\/?\s*(.+)$/);
     if (match) {
+      messageIdCount++;
       msgMap.set(match[1].trim(), match[2].trim());
     }
   }
 
-  return msgMap;
+  // If we found fewer than 2 message IDs, treat it as a custom prompt
+  if (messageIdCount < 2) {
+    isPrompt = true;
+    customPrompt = messageList.trim();
+    msgMap.clear(); // Clear any accidentally parsed data
+  }
+
+  return { messageMap: msgMap, customPrompt, isPrompt };
 }
 
 function extractProgramName(lines) {
@@ -791,15 +807,24 @@ END FUNCTION`;
 function formatDocumentation(data) {
   let doc = '';
 
-  // Message List
-  doc += '═══════════════════════════════════════════════════════════════════════\n';
-  doc += 'MESSAGE LIST\n';
-  doc += '═══════════════════════════════════════════════════════════════════════\n\n';
-
-  if (data.messageList && data.messageList.trim()) {
-    doc += data.messageList + '\n\n';
+  // Message List OR Custom Instructions
+  if (data.isPrompt && data.customPrompt) {
+    doc += '═══════════════════════════════════════════════════════════════════════\n';
+    doc += 'CUSTOM INSTRUCTIONS\n';
+    doc += '═══════════════════════════════════════════════════════════════════════\n\n';
+    doc += 'User provided the following custom instructions for documentation:\n\n';
+    doc += data.customPrompt + '\n\n';
+    doc += 'NOTE: These instructions have been considered in generating the documentation below.\n\n';
   } else {
-    doc += 'No message list provided.\n\n';
+    doc += '═══════════════════════════════════════════════════════════════════════\n';
+    doc += 'MESSAGE LIST\n';
+    doc += '═══════════════════════════════════════════════════════════════════════\n\n';
+
+    if (data.messageList && data.messageList.trim()) {
+      doc += data.messageList + '\n\n';
+    } else {
+      doc += 'No message list provided.\n\n';
+    }
   }
 
   // Section 1 - Program Overview
