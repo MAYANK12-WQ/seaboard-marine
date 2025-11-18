@@ -154,30 +154,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Message List - Upload OR Type */}
+          {/* Message List - Type Only */}
           <div className="form-group">
             <label htmlFor="messageList">
               <strong>Message List</strong>
               <span className="optional">(Optional)</span>
             </label>
-
-            <div className="upload-section">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileUpload(e, 'msg')}
-                className="file-input"
-                id="msgImageUpload"
-                disabled={processingOCR.msg}
-              />
-              <label htmlFor="msgImageUpload" className="upload-button">
-                {processingOCR.msg
-                  ? `🔄 Processing... ${ocrProgress.msg}%`
-                  : uploadedFiles.msg
-                  ? `✅ ${uploadedFiles.msg} - Click to change`
-                  : '📸 Upload Image of Message List (Optional)'}
-              </label>
-            </div>
 
             <textarea
               id="messageList"
@@ -186,13 +168,12 @@ export default function Home() {
               placeholder="Paste message list here OR type custom instructions (e.g., 'Add more security details', 'Include error handling examples')..."
               className="textarea"
               rows={8}
-              disabled={processingOCR.msg}
             />
           </div>
 
           <button
             onClick={generateDocumentation}
-            disabled={loading || processingOCR.rpg || processingOCR.msg || !rpgCode}
+            disabled={loading || processingOCR.rpg || !rpgCode}
             className="btn-primary"
           >
             {loading ? '⏳ Generating Code...' : '📄 Generate Code'}
