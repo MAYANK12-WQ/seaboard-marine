@@ -8,12 +8,18 @@
     "start": "next start",
     "lint": "next lint"
   },
-  "keywords": ["RPG", "AS400", "Documentation", "Reverse Engineering"],
+  "keywords": [
+    "RPG",
+    "AS400",
+    "Documentation",
+    "Reverse Engineering"
+  ],
   "author": "Seaboard Marine",
   "license": "ISC",
   "dependencies": {
     "next": "^16.0.3",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tesseract.js": "^6.0.1"
   }
 }

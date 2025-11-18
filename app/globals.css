@@ -77,6 +77,38 @@ body {
   font-weight: normal;
 }
 
+.upload-section {
+  margin-bottom: 1rem;
+}
+
+.file-input {
+  display: none;
+}
+
+.upload-button {
+  display: inline-block;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  width: 100%;
+}
+
+.upload-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+}
+
+.upload-button:active {
+  transform: translateY(0);
+}
+
 .textarea {
   width: 100%;
   padding: 1rem;
@@ -91,6 +123,11 @@ body {
 .textarea:focus {
   outline: none;
   border-color: #667eea;
+}
+
+.textarea:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
 }
 
 .btn-primary {

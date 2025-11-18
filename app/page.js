@@ -1,16 +1,72 @@
 'use client';
 
 import { useState } from 'react';
+import Tesseract from 'tesseract.js';
 
 export default function Home() {
   const [rpgCode, setRpgCode] = useState('');
   const [messageList, setMessageList] = useState('');
   const [documentation, setDocumentation] = useState('');
   const [loading, setLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState({ rpg: 0, msg: 0 });
+  const [processingOCR, setProcessingOCR] = useState({ rpg: false, msg: false });
+
+  const processImage = async (file, type) => {
+    if (!file) return;
+
+    // Check if file is an image
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload a valid image file (PNG, JPG, etc.)');
+      return;
+    }
+
+    const fieldType = type === 'rpg' ? 'rpg' : 'msg';
+    setProcessingOCR(prev => ({ ...prev, [fieldType]: true }));
+    setOcrProgress(prev => ({ ...prev, [fieldType]: 0 }));
+
+    try {
+      const result = await Tesseract.recognize(
+        file,
+        'eng',
+        {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setOcrProgress(prev => ({
+                ...prev,
+                [fieldType]: Math.round(m.progress * 100)
+              }));
+            }
+          }
+        }
+      );
+
+      const extractedText = result.data.text;
+
+      if (type === 'rpg') {
+        setRpgCode(extractedText);
+      } else {
+        setMessageList(extractedText);
+      }
+
+      alert(`✅ Image processed successfully! Text extracted and populated.`);
+    } catch (error) {
+      alert('Error processing image: ' + error.message);
+    } finally {
+      setProcessingOCR(prev => ({ ...prev, [fieldType]: false }));
+      setOcrProgress(prev => ({ ...prev, [fieldType]: 0 }));
+    }
+  };
+
+  const handleFileUpload = (e, type) => {
+    const file = e.target.files[0];
+    if (file) {
+      processImage(file, type);
+    }
+  };
 
   const generateDocumentation = async () => {
     if (!rpgCode.trim()) {
-      alert('Please enter RPG code');
+      alert('Please enter RPG code or upload an image');
       return;
     }
 
@@ -74,13 +130,31 @@ export default function Home() {
               <strong>RPG Program Code</strong>
               <span className="required">*</span>
             </label>
+
+            <div className="upload-section">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileUpload(e, 'rpg')}
+                className="file-input"
+                id="rpgImageUpload"
+                disabled={processingOCR.rpg}
+              />
+              <label htmlFor="rpgImageUpload" className="upload-button">
+                {processingOCR.rpg
+                  ? `🔄 Processing... ${ocrProgress.rpg}%`
+                  : '📸 Upload Image of RPG Code'}
+              </label>
+            </div>
+
             <textarea
               id="rpgCode"
               value={rpgCode}
               onChange={(e) => setRpgCode(e.target.value)}
-              placeholder="Paste your RPG program code here..."
+              placeholder="Paste your RPG program code here or upload an image above..."
               className="textarea"
               rows={12}
+              disabled={processingOCR.rpg}
             />
           </div>
 
@@ -89,19 +163,37 @@ export default function Home() {
               <strong>Message List</strong>
               <span className="optional">(Optional)</span>
             </label>
+
+            <div className="upload-section">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileUpload(e, 'msg')}
+                className="file-input"
+                id="msgImageUpload"
+                disabled={processingOCR.msg}
+              />
+              <label htmlFor="msgImageUpload" className="upload-button">
+                {processingOCR.msg
+                  ? `🔄 Processing... ${ocrProgress.msg}%`
+                  : '📸 Upload Image of Message List'}
+              </label>
+            </div>
+
             <textarea
               id="messageList"
               value={messageList}
               onChange={(e) => setMessageList(e.target.value)}
-              placeholder="Paste your message list here (if applicable)..."
+              placeholder="Paste your message list here or upload an image above..."
               className="textarea"
               rows={8}
+              disabled={processingOCR.msg}
             />
           </div>
 
           <button
             onClick={generateDocumentation}
-            disabled={loading}
+            disabled={loading || processingOCR.rpg || processingOCR.msg}
             className="btn-primary"
           >
             {loading ? '⏳ Generating Documentation...' : '📄 Generate Documentation'}
