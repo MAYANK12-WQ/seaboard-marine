@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { rpgCode, messageList } = await request.json();
+    const { rpgCode, messageList, customPrompt } = await request.json();
 
     if (!rpgCode || !rpgCode.trim()) {
       return NextResponse.json(
@@ -11,7 +11,7 @@ export async function POST(request) {
       );
     }
 
-    const documentation = generateRPGDocumentation(rpgCode, messageList || '');
+    const documentation = generateRPGDocumentation(rpgCode, messageList || '', customPrompt || '');
 
     return NextResponse.json({ documentation });
   } catch (error) {
@@ -23,11 +23,14 @@ export async function POST(request) {
   }
 }
 
-function generateRPGDocumentation(rpgCode, messageList) {
+function generateRPGDocumentation(rpgCode, messageList, systemPrompt) {
   const lines = rpgCode.split('\n');
 
   // Parse message list first for use throughout (supports both message lists AND custom prompts)
   const { messageMap, customPrompt, isPrompt } = parseMessageListOrPrompt(messageList);
+
+  // Note: systemPrompt parameter is available for future AI integration
+  // Currently, documentation is generated using rule-based parsing
 
   // Extract program metadata
   const programName = extractProgramName(lines);
