@@ -3,21 +3,94 @@
 import { useState, useEffect } from 'react';
 import Tesseract from 'tesseract.js';
 
-const DEFAULT_PROMPT = `You are an expert RPG/AS400 code analyzer. Your task is to analyze the provided RPG code and generate comprehensive reverse engineering documentation.
+const DEFAULT_PROMPT = `You are an expert software analyst specializing in AS400/RPG to Reverse Engineering Document generation. Reverse Engineering Document is a specification document which contain high level program understanding and writes down everything into plain English for anybody to understand. It should also contain the pseudocode to drill into details. Create clear documentation that enables a developer to rewrite this RPG program in any other language without consulting the original code.
 
-Include the following in your analysis:
-1. Program Overview - Name, Type, Purpose, Input/Output
-2. File Operations - All database files with access methods and key fields
-3. Business Rules - Conditional logic and validation rules
-4. Call Stack - Programs and subroutines called
-5. Dependencies - External programs, files, and resources
-6. Screen Actions - User interface interactions
-7. Validations and Messages - Error handling and user messages
-8. Data Mappings - Field transformations and data flow
-9. Messages Used - All message IDs with text
-10. Detailed Processing - Step-by-step logic with pseudocode
+ANALYSIS REQUIREMENTS:
 
-Provide clear, detailed documentation suitable for developers migrating this code to modern systems.`;
+• Start with high-level program purpose, then drill into details
+• For every section, provide both plain English explanation AND pseudocode
+• Include complete backend field mappings with user interface and business logic
+• Make it executable - detailed enough to code directly from
+• Wherever you see the message code, get the exact message from the message list and use it in the pseudocode – "Message List". Even if you don't find some message code in the message list, give them in the messages section.
+
+ANALYSIS INSTRUCTIONS:
+
+1. Read the entire RPG program to understand its purpose
+2. Break it into logical processing steps
+3. For each step, explain what it does AND how it does it
+4. Document all data movements and calculations
+5. Include enough detail for a developer to rewrite it
+6. Include all parameters for subroutines, do not exclude even a single parameter
+7. If message file is referenced in a program file, write the step to refer it under validations
+8. Include subroutine parameters under Detailed processing section as well if found
+9. If display message is found for any message id then include display message text as well.
+10. Under File Operation section, field definitions are below
+   -FileName: Data File and fields from where the data is picked
+   -Purpose: What is the usage of that file – input, output, update or input/output both
+   -AccessType: whether this file contains any key or not
+   -KeyFields: if key exists then check the key fields names, if dependency is on database the mention that under dependency section.
+11. Data mapping field definitions –
+   -SourceField: Data File Field from where the data is picked
+   -TargetField: It could be a display file field name
+   -TargetFileName: It should be the workstation file name or database file name
+   -TransformNotes: Data manipulations applied while loading the data. If there is any option selection process such as edit, delete, print, then give all details under single process itself.
+12. Carefully examine composite keys in the RPG program file then store it under "File Operations" section
+13. Refer "source master" with the identified source file name under "F spec"
+
+FORMATTING INSTRUCTIONS:
+- Use clear headers and bullet points
+- Include code blocks for pseudocode
+- Use tables for data mappings
+- Keep explanations concise but complete
+
+Output should be in "RPG Migration Documentation". Template structure:
+
+Section 1 - Program Overview
+Program: [NAME]
+Type: [Batch/Screen/Report]
+Purpose: [What this program does in one sentence]
+Input: [Parameters or screen inputs]
+Output: [What program produces]
+High-Level Logic: [Explain the overall business purpose in 2-3 sentences]
+
+Section 2 – File Operations
+Table format: FileName, Purpose, AccessType, KeyFields-KeyFieldType
+Especially check primary, composite or any other such important key
+
+Section 3 – Business Rules
+Table format: RuleName, RuleDescription
+Do Not include "Error indicator management" in this section
+Include "Screen Filter Rules" in this section
+
+Section 4 – Call Stack
+The order of program calling with each program name and its sequence
+Do Not include - **Command Execution:**, **Help Processing:**, **Exit Processing:**
+
+Section 5 – Dependencies
+The list of other programs, database files etc on which the execution of this file depends on.
+Do not include **Help Text:** in this section
+
+Section 6 – Screen Actions (if applicable)
+If there is an option selection screen (Edit / Delete / Print / Add), document all possible options under the same process
+
+Section 7 – Validations and Messages
+Document all validations (field-level, record-level)
+If a message file is used, describe the step and associated message IDs
+
+Section 8 – Data Mappings
+Table format: Source Database Field Name, equivalent Target Field Name, Target File Name and applied Transform Notes
+
+Section 9 – Message Section
+List all the messages with their code that are used in this file
+
+Section 10 – Detailed Processing
+Detailed Processing Steps
+Step N: [Process Name]
+Describe the logic or user interaction
+Pseudocode should be described in not more than 50-70 lines
+FUNCTION [step_n]()
+    // Pseudocode logic here
+END FUNCTION`;
 
 export default function Home() {
   const [rpgCode, setRpgCode] = useState('');
@@ -69,10 +142,10 @@ export default function Home() {
 
         if (type === 'rpg') {
           setRpgCode(text);
-          setUploadedFiles(prev => ({ ...prev, rpg: file.name }));
+          setUploadedFiles(prev => ({ ...prev, rpg: { name: file.name, type: 'text' } }));
         } else {
           setMessageList(text);
-          setUploadedFiles(prev => ({ ...prev, msg: file.name }));
+          setUploadedFiles(prev => ({ ...prev, msg: { name: file.name, type: 'text' } }));
         }
 
         alert(`✅ Text file loaded successfully!\nFile: ${file.name}`);
@@ -112,10 +185,10 @@ export default function Home() {
 
       if (type === 'rpg') {
         setRpgCode(extractedText);
-        setUploadedFiles(prev => ({ ...prev, rpg: file.name }));
+        setUploadedFiles(prev => ({ ...prev, rpg: { name: file.name, type: 'image' } }));
       } else {
         setMessageList(extractedText);
-        setUploadedFiles(prev => ({ ...prev, msg: file.name }));
+        setUploadedFiles(prev => ({ ...prev, msg: { name: file.name, type: 'image' } }));
       }
 
       alert(`✅ Image processed successfully!\nFile: ${file.name}\nText extracted and ready for code generation.`);
@@ -409,22 +482,42 @@ export default function Home() {
               <span className="required">*</span>
             </label>
 
-            <div className="upload-section">
-              <input
-                type="file"
-                accept="image/*,.txt"
-                onChange={(e) => handleFileUpload(e, 'rpg')}
-                className="file-input"
-                id="rpgImageUpload"
-                disabled={processingOCR.rpg}
-              />
-              <label htmlFor="rpgImageUpload" className="upload-button">
-                {processingOCR.rpg
-                  ? `🔄 Processing... ${ocrProgress.rpg}%`
-                  : uploadedFiles.rpg
-                  ? `✅ ${uploadedFiles.rpg} - Click to change`
-                  : '📸 Upload Image or 📄 .txt file of RPG Code'}
-              </label>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              {/* Image Upload Button */}
+              <div style={{ flex: 1, minWidth: '250px' }}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleFileUpload(e, 'rpg')}
+                  className="file-input"
+                  id="rpgImageUpload"
+                  disabled={processingOCR.rpg}
+                />
+                <label htmlFor="rpgImageUpload" className="upload-button">
+                  {processingOCR.rpg
+                    ? `🔄 Processing... ${ocrProgress.rpg}%`
+                    : uploadedFiles.rpg && uploadedFiles.rpg.type === 'image'
+                    ? `✅ ${uploadedFiles.rpg.name} - Click to change`
+                    : '📸 Upload Image (PNG, JPG)'}
+                </label>
+              </div>
+
+              {/* Text File Upload Button */}
+              <div style={{ flex: 1, minWidth: '250px' }}>
+                <input
+                  type="file"
+                  accept=".txt"
+                  onChange={(e) => handleFileUpload(e, 'rpg')}
+                  className="file-input"
+                  id="rpgTextUpload"
+                  disabled={processingOCR.rpg}
+                />
+                <label htmlFor="rpgTextUpload" className="upload-button" style={{ background: 'linear-gradient(135deg, #27ae60 0%, #229954 100%)' }}>
+                  {uploadedFiles.rpg && uploadedFiles.rpg.type === 'text'
+                    ? `✅ ${uploadedFiles.rpg.name} - Click to change`
+                    : '📄 Upload .txt File'}
+                </label>
+              </div>
             </div>
           </div>
 
