@@ -218,18 +218,35 @@ export default function Home() {
       localStorage.setItem('rpg_prompt', tempPrompt);
       setCurrentPrompt(tempPrompt);
 
-      // Log the change
+      // Get current history and calculate next version
       const history = JSON.parse(localStorage.getItem('prompt_history') || '[]');
+
+      // Find the latest version number
+      let latestVersion = 0.0;
+      history.forEach(entry => {
+        if (entry.version) {
+          const versionNum = parseFloat(entry.version);
+          if (versionNum > latestVersion) {
+            latestVersion = versionNum;
+          }
+        }
+      });
+
+      // Increment version by 0.1
+      const newVersion = latestVersion === 0 ? 1.0 : Math.round((latestVersion + 0.1) * 10) / 10;
+
+      // Add new entry with version
       history.push({
         timestamp: new Date().toISOString(),
         prompt: tempPrompt,
-        action: 'updated'
+        action: 'updated',
+        version: newVersion.toFixed(1)
       });
       localStorage.setItem('prompt_history', JSON.stringify(history));
 
       setIsEditingPrompt(false);
       loadPromptHistory(); // Refresh history display
-      alert('✅ Prompt saved successfully!');
+      alert(`✅ Prompt saved successfully as Version ${newVersion.toFixed(1)}!`);
     }
   };
 
@@ -665,6 +682,18 @@ export default function Home() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.75rem' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                          {entry.version && (
+                            <span style={{
+                              background: '#9b59b6',
+                              color: 'white',
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '12px',
+                              fontSize: '0.85rem',
+                              fontWeight: '600'
+                            }}>
+                              📌 v{entry.version}
+                            </span>
+                          )}
                           <span style={{
                             background: entry.action === 'updated' ? '#3498db' : entry.action === 'reset' ? '#e74c3c' : '#27ae60',
                             color: 'white',
