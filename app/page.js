@@ -312,12 +312,15 @@ export default function Home() {
 
   const generateDocumentation = async () => {
     if (!rpgCode.trim()) {
-      alert('Please upload an image of RPG code first');
+      alert('⚠️ Please upload RPG code first (either as an image or text file)');
       return;
     }
 
     setLoading(true);
     setDocumentation('');
+
+    console.log('🚀 Starting AI documentation generation...');
+    const startTime = Date.now();
 
     try {
       const response = await fetch('/api/generate', {
@@ -333,14 +336,24 @@ export default function Home() {
       });
 
       const data = await response.json();
+      const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
 
       if (response.ok) {
+        console.log(`✅ Documentation generated in ${elapsedTime}s`);
+        console.log(`📊 Tokens used: ${data.tokensUsed || 'N/A'}`);
+        console.log(`🤖 Model: ${data.model || 'N/A'}`);
+
         setDocumentation(data.documentation);
+
+        // Show success message with details
+        alert(`✅ Documentation Generated Successfully!\n\n⏱️ Time taken: ${elapsedTime}s\n📊 Tokens used: ${data.tokensUsed || 'N/A'}\n🤖 Model: ${data.model || 'N/A'}`);
       } else {
-        alert('Error: ' + (data.error || 'Failed to generate code'));
+        console.error('❌ Generation failed:', data.error);
+        alert(`❌ Error: ${data.error || 'Failed to generate documentation'}\n\nPlease check:\n1. GROQ_API_KEY is set in .env.local\n2. API key is valid\n3. RPG code is not too large`);
       }
     } catch (error) {
-      alert('Error: ' + error.message);
+      console.error('❌ Request failed:', error);
+      alert(`❌ Error: ${error.message}\n\nPlease check your internet connection and try again.`);
     } finally {
       setLoading(false);
     }
