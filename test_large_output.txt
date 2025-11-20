@@ -1,0 +1,314 @@
+# RPG Migration Documentation
+
+## Section 1 - Program Overview
+Program: Customer Management
+Type: Screen
+Purpose: This program manages customer data, allowing users to add, edit, delete, search, and report customer information.
+Input: Customer number, option selection (add, edit, delete, search, report)
+Output: Updated customer data, log records, and messages
+High-Level Logic: The program uses a menu-driven interface to allow users to interact with customer data. It validates user input, performs CRUD (create, read, update, delete) operations, and logs user actions.
+
+## Section 2 – File Operations
+| FileName | Purpose | AccessType | KeyFields-KeyFieldType |
+| --- | --- | --- | --- |
+| CUSTMAST | Input/Output | Keyed | CUSTNO-7 0 |
+| ORDDFILE | Output | Sequential |  |
+| DSPFILE | Input/Output | Workstation |  |
+| LOGFILE | Output | Sequential |  |
+| MSGFILE | Input | Keyed | MSGID-7 |
+
+## Section 3 – Business Rules
+| RuleName | RuleDescription |
+| --- | --- |
+| Validate Customer Name | Customer name cannot be blank |
+| Validate Amount | Amount must be greater than zero |
+| Validate Email | Email must contain '@' symbol |
+| Validate Option | Option must be between 1 and 5 |
+
+## Section 4 – Call Stack
+1. MAINLOOP
+2. ADDREC
+3. EDITREC
+4. DELREC
+5. SEARCH
+6. REPORT
+7. VALIDATE
+8. SHOWMSG
+9. WRITELOG
+
+## Section 5 – Dependencies
+* CUSTMAST file
+* MSGFILE file
+* LOGFILE file
+* ORDDFILE file
+* DSPFILE file
+
+## Section 6 – Screen Actions
+The program has the following screen actions:
+* Add customer: prompts user for customer information and adds a new customer record
+* Edit customer: prompts user for customer number, retrieves the customer record, and allows user to edit the record
+* Delete customer: prompts user for customer number, retrieves the customer record, and deletes the record
+* Search customer: prompts user for search key, retrieves matching customer records, and displays the results
+* Report customer: generates a report of all customer records
+
+## Section 7 – Validations and Messages
+The program performs the following validations:
+* Customer name cannot be blank (ERR0003)
+* Amount must be greater than zero (ERR0004)
+* Email must contain '@' symbol (ERR0005)
+* Option must be between 1 and 5 (ERR0001)
+The program uses the MSGFILE file to retrieve message texts for the following message IDs:
+* ERR0001: Invalid option
+* ERR0002: Customer not found
+* ERR0003: Customer name cannot be blank
+* ERR0004: Amount must be greater than zero
+* ERR0005: Email must contain '@' symbol
+* INF0001: Customer added successfully
+* INF0002: Customer updated successfully
+* INF0003: Customer deleted successfully
+* INF0004: Report generated successfully
+
+## Section 8 – Data Mappings
+| SourceField | TargetField | TargetFileName | TransformNotes |
+| --- | --- | --- | --- |
+| CUSTNO | CUSTNO | CUSTMAST |  |
+| CUSTNAME | CUSTNAME | CUSTMAST |  |
+| ADDRESS | ADDRESS | CUSTMAST |  |
+| CITY | CITY | CUSTMAST |  |
+| STATE | STATE | CUSTMAST |  |
+| ZIP | ZIP | CUSTMAST |  |
+| PHONE | PHONE | CUSTMAST |  |
+| EMAIL | EMAIL | CUSTMAST |  |
+| STATUS | STATUS | CUSTMAST |  |
+| LASTUPDT | LASTUPDT | CUSTMAST |  |
+| AMOUNT | AMOUNT | CUSTMAST |  |
+| BALANCE | BALANCE | CUSTMAST |  |
+| TRANCOUNT | TRANCOUNT | CUSTMAST |  |
+| VALIDFLAG | VALIDFLAG |  |  |
+| ERRORMSG | ERRORMSG |  |  |
+| MSGID | MSGID | MSGFILE |  |
+| MSGTEXT | MSGTEXT | MSGFILE |  |
+| OPTION | OPTION |  |  |
+| SEARCHKEY | SEARCHKEY |  |  |
+
+## Section 9 – Message Section
+| Message ID | Message Text |
+| --- | --- |
+| ERR0001 | Invalid option |
+| ERR0002 | Customer not found |
+| ERR0003 | Customer name cannot be blank |
+| ERR0004 | Amount must be greater than zero |
+| ERR0005 | Email must contain '@' symbol |
+| INF0001 | Customer added successfully |
+| INF0002 | Customer updated successfully |
+| INF0003 | Customer deleted successfully |
+| INF0004 | Report generated successfully |
+
+## Section 10 – Detailed Processing
+### Step 1: Main Loop
+```pseudocode
+FUNCTION MAINLOOP()
+    // Display main menu
+    EXFMT MAINSCR
+    IF *INKC THEN
+        GOTO EXITPGM
+    ENDIF
+    
+    // Get user option
+    IF OPTION = '1' THEN
+        EXSR ADDREC
+    ELSEIF OPTION = '2' THEN
+        EXSR EDITREC
+    ELSEIF OPTION = '3' THEN
+        EXSR DELREC
+    ELSEIF OPTION = '4' THEN
+        EXSR SEARCH
+    ELSEIF OPTION = '5' THEN
+        EXSR REPORT
+    ELSE
+        EVAL MSGID = 'ERR0001'
+        EXSR SHOWMSG
+    ENDIF
+    
+    GOTO MAINLOOP
+END FUNCTION
+```
+
+### Step 2: Add Customer
+```pseudocode
+FUNCTION ADDREC()
+    // Display add customer screen
+    EXFMT ADDSCR
+    IF *INKC THEN
+        LEAVESR
+    ENDIF
+    
+    // Validate customer information
+    EXSR VALIDATE
+    IF VALIDFLAG = '1' THEN
+        // Add customer record
+        EVAL LASTUPDT = %DATE()
+        EVAL STATUS = 'A'
+        EVAL BALANCE = AMOUNT
+        WRITE CUSTREC
+        EVAL MSGID = 'INF0001'
+        EXSR SHOWMSG
+        EXSR WRITELOG
+    ENDIF
+END FUNCTION
+```
+
+### Step 3: Edit Customer
+```pseudocode
+FUNCTION EDITREC()
+    // Retrieve customer record
+    CUSTNO CHAIN CUSTMAST 90
+    IF *IN90 THEN
+        EVAL MSGID = 'ERR0002'
+        EXSR SHOWMSG
+        LEAVESR
+    ENDIF
+    
+    // Display edit customer screen
+    EXFMT EDITSCR
+    IF *INKC THEN
+        LEAVESR
+    ENDIF
+    
+    // Validate customer information
+    EXSR VALIDATE
+    IF VALIDFLAG = '1' THEN
+        // Update customer record
+        EVAL LASTUPDT = %DATE()
+        UPDATE CUSTREC
+        EVAL MSGID = 'INF0002'
+        EXSR SHOWMSG
+        EXSR WRITELOG
+    ENDIF
+END FUNCTION
+```
+
+### Step 4: Delete Customer
+```pseudocode
+FUNCTION DELREC()
+    // Retrieve customer record
+    CUSTNO CHAIN CUSTMAST 90
+    IF *IN90 THEN
+        EVAL MSGID = 'ERR0002'
+        EXSR SHOWMSG
+        LEAVESR
+    ENDIF
+    
+    // Display delete customer screen
+    EXFMT DELSCR
+    IF *INKC OR CONFIRM <> 'Y' THEN
+        LEAVESR
+    ENDIF
+    
+    // Delete customer record
+    DELETE CUSTREC
+    EVAL MSGID = 'INF0003'
+    EXSR SHOWMSG
+    EXSR WRITELOG
+END FUNCTION
+```
+
+### Step 5: Search Customer
+```pseudocode
+FUNCTION SEARCH()
+    // Display search customer screen
+    EXFMT SEARCHSCR
+    IF *INKC THEN
+        LEAVESR
+    ENDIF
+    
+    // Retrieve matching customer records
+    SETLL *LOVAL CUSTMAST
+    DOU %EOF(CUSTMAST)
+        READ CUSTMAST
+        IF %SCAN(SEARCHKEY:CUSTNAME) > 0 THEN
+            EXFMT RESULTSCR
+            IF *INKC THEN
+                LEAVE
+            ENDIF
+        ENDIF
+    ENDDO
+END FUNCTION
+```
+
+### Step 6: Report Customer
+```pseudocode
+FUNCTION REPORT()
+    // Generate report of all customer records
+    SETLL *LOVAL CUSTMAST
+    DOU %EOF(CUSTMAST)
+        READ CUSTMAST
+        WRITE REPORTREC
+        EVAL TRANCOUNT = TRANCOUNT + 1
+    ENDDO
+    EVAL MSGID = 'INF0004'
+    EXSR SHOWMSG
+END FUNCTION
+```
+
+### Step 7: Validate Customer Information
+```pseudocode
+FUNCTION VALIDATE()
+    // Initialize valid flag
+    EVAL VALIDFLAG = '1'
+    
+    // Validate customer name
+    IF CUSTNAME = *BLANKS THEN
+        EVAL MSGID = 'ERR0003'
+        EVAL VALIDFLAG = '0'
+        EXSR SHOWMSG
+    ENDIF
+    
+    // Validate amount
+    IF AMOUNT <= 0 THEN
+        EVAL MSGID = 'ERR0004'
+        EVAL VALIDFLAG = '0'
+        EXSR SHOWMSG
+    ENDIF
+    
+    // Validate email
+    IF EMAIL <> *BLANKS THEN
+        IF %SCAN('@':EMAIL) = 0 THEN
+            EVAL MSGID = 'ERR0005'
+            EVAL VALIDFLAG = '0'
+            EXSR SHOWMSG
+        ENDIF
+    ENDIF
+END FUNCTION
+```
+
+### Step 8: Show Message
+```pseudocode
+FUNCTION SHOWMSG()
+    // Retrieve message text from MSGFILE
+    MSGID CHAIN MSGFILE 91
+    IF NOT *IN91 THEN
+        EVAL MSGTEXT = MSGFTEXT
+    ELSE
+        EVAL MSGTEXT = 'Unknown error'
+    ENDIF
+    
+    // Display message
+    EXFMT MSGSCR
+END FUNCTION
+```
+
+### Step 9: Write Log
+```pseudocode
+FUNCTION WRITELOG()
+    // Get current date and time
+    EVAL LOGDATE = %DATE()
+    EVAL LOGTIME = %TIME()
+    EVAL LOGUSER = %USER
+    EVAL LOGACTION = OPTION
+    EVAL LOGCUST = CUSTNO
+    
+    // Write log record
+    WRITE LOGREC
+END FUNCTION
+```

@@ -1,0 +1,181 @@
+     FCUSTMAST  IF   E           K DISK    KNUM(2)
+     FORDFILE   O    E             DISK
+     FDSPFILE   CF   E             WORKSTN
+     FLOGFILE   O    E             DISK
+     FMSGFILE   IF   E           K DISK
+     
+     D CUSTNO          S              7  0
+     D CUSTNAME        S             30
+     D ADDRESS         S             50
+     D CITY            S             25
+     D STATE           S              2
+     D ZIP             S             10
+     D PHONE           S             15
+     D EMAIL           S             50
+     D STATUS          S              1
+     D LASTUPDT        S               D
+     D AMOUNT          S             15  2
+     D BALANCE         S             15  2
+     D TRANCOUNT       S              5  0
+     D VALIDFLAG       S              1
+     D ERRORMSG        S            100
+     D MSGID           S              7
+     D MSGTEXT         S            100
+     D OPTION          S              1
+     D SEARCHKEY       S             30
+     
+     C     *ENTRY        PLIST
+     C                   PARM                    CUSTNO
+     C                   PARM                    OPTION
+     
+     C     MAINLOOP      TAG
+     C                   EXFMT     MAINSCR
+     C                   IF        *INKC
+     C                   GOTO      EXITPGM
+     C                   ENDIF
+     
+     C                   IF        OPTION = '1'
+     C                   EXSR      ADDREC
+     C                   ELSEIF    OPTION = '2'
+     C                   EXSR      EDITREC
+     C                   ELSEIF    OPTION = '3'
+     C                   EXSR      DELREC
+     C                   ELSEIF    OPTION = '4'
+     C                   EXSR      SEARCH
+     C                   ELSEIF    OPTION = '5'
+     C                   EXSR      REPORT
+     C                   ELSE
+     C                   EVAL      MSGID = 'ERR0001'
+     C                   EXSR      SHOWMSG
+     C                   ENDIF
+     C                   GOTO      MAINLOOP
+     
+     C     ADDREC        BEGSR
+     C                   EXFMT     ADDSCR
+     C                   IF        *INKC
+     C                   LEAVESR
+     C                   ENDIF
+     C                   EXSR      VALIDATE
+     C                   IF        VALIDFLAG = '1'
+     C                   EVAL      LASTUPDT = %DATE()
+     C                   EVAL      STATUS = 'A'
+     C                   EVAL      BALANCE = AMOUNT
+     C                   WRITE     CUSTREC
+     C                   EVAL      MSGID = 'INF0001'
+     C                   EXSR      SHOWMSG
+     C                   EXSR      WRITELOG
+     C                   ENDIF
+     C                   ENDSR
+     
+     C     EDITREC       BEGSR
+     C     CUSTNO        CHAIN     CUSTMAST                           90
+     C                   IF        *IN90
+     C                   EVAL      MSGID = 'ERR0002'
+     C                   EXSR      SHOWMSG
+     C                   LEAVESR
+     C                   ENDIF
+     C                   EXFMT     EDITSCR
+     C                   IF        *INKC
+     C                   LEAVESR
+     C                   ENDIF
+     C                   EXSR      VALIDATE
+     C                   IF        VALIDFLAG = '1'
+     C                   EVAL      LASTUPDT = %DATE()
+     C                   UPDATE    CUSTREC
+     C                   EVAL      MSGID = 'INF0002'
+     C                   EXSR      SHOWMSG
+     C                   EXSR      WRITELOG
+     C                   ENDIF
+     C                   ENDSR
+     
+     C     DELREC        BEGSR
+     C     CUSTNO        CHAIN     CUSTMAST                           90
+     C                   IF        *IN90
+     C                   EVAL      MSGID = 'ERR0002'
+     C                   EXSR      SHOWMSG
+     C                   LEAVESR
+     C                   ENDIF
+     C                   EXFMT     DELSCR
+     C                   IF        *INKC OR CONFIRM <> 'Y'
+     C                   LEAVESR
+     C                   ENDIF
+     C                   DELETE    CUSTREC
+     C                   EVAL      MSGID = 'INF0003'
+     C                   EXSR      SHOWMSG
+     C                   EXSR      WRITELOG
+     C                   ENDSR
+     
+     C     SEARCH        BEGSR
+     C                   EXFMT     SEARCHSCR
+     C                   IF        *INKC
+     C                   LEAVESR
+     C                   ENDIF
+     C     SEARCHKEY     SETLL     CUSTMAST
+     C                   DOU       %EOF(CUSTMAST)
+     C                   READ      CUSTMAST
+     C                   IF        NOT %EOF(CUSTMAST)
+     C                   IF        %SCAN(SEARCHKEY:CUSTNAME) > 0
+     C                   EXFMT     RESULTSCR
+     C                   IF        *INKC
+     C                   LEAVE
+     C                   ENDIF
+     C                   ENDIF
+     C                   ENDIF
+     C                   ENDDO
+     C                   ENDSR
+     
+     C     REPORT        BEGSR
+     C                   SETLL     *LOVAL        CUSTMAST
+     C                   DOU       %EOF(CUSTMAST)
+     C                   READ      CUSTMAST
+     C                   IF        NOT %EOF(CUSTMAST)
+     C                   WRITE     REPORTREC
+     C                   EVAL      TRANCOUNT = TRANCOUNT + 1
+     C                   ENDIF
+     C                   ENDDO
+     C                   EVAL      MSGID = 'INF0004'
+     C                   EXSR      SHOWMSG
+     C                   ENDSR
+     
+     C     VALIDATE      BEGSR
+     C                   EVAL      VALIDFLAG = '1'
+     C                   IF        CUSTNAME = *BLANKS
+     C                   EVAL      MSGID = 'ERR0003'
+     C                   EVAL      VALIDFLAG = '0'
+     C                   EXSR      SHOWMSG
+     C                   ENDIF
+     C                   IF        AMOUNT <= 0
+     C                   EVAL      MSGID = 'ERR0004'
+     C                   EVAL      VALIDFLAG = '0'
+     C                   EXSR      SHOWMSG
+     C                   ENDIF
+     C                   IF        EMAIL <> *BLANKS
+     C                   IF        %SCAN('@':EMAIL) = 0
+     C                   EVAL      MSGID = 'ERR0005'
+     C                   EVAL      VALIDFLAG = '0'
+     C                   EXSR      SHOWMSG
+     C                   ENDIF
+     C                   ENDIF
+     C                   ENDSR
+     
+     C     SHOWMSG       BEGSR
+     C     MSGID         CHAIN     MSGFILE                            91
+     C                   IF        NOT *IN91
+     C                   EVAL      MSGTEXT = MSGFTEXT
+     C                   ELSE
+     C                   EVAL      MSGTEXT = 'Unknown error'
+     C                   ENDIF
+     C                   EXFMT     MSGSCR
+     C                   ENDSR
+     
+     C     WRITELOG      BEGSR
+     C                   EVAL      LOGDATE = %DATE()
+     C                   EVAL      LOGTIME = %TIME()
+     C                   EVAL      LOGUSER = %USER
+     C                   EVAL      LOGACTION = OPTION
+     C                   EVAL      LOGCUST = CUSTNO
+     C                   WRITE     LOGREC
+     C                   ENDSR
+     
+     C     EXITPGM       TAG
+     C                   SETON                                        LR
