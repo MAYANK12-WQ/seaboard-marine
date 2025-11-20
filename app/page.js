@@ -312,14 +312,15 @@ export default function Home() {
 
   const generateDocumentation = async () => {
     if (!rpgCode.trim()) {
-      alert('⚠️ Please upload RPG code first (either as an image or text file)');
+      alert('Please upload RPG code first (image or text file)');
       return;
     }
 
     setLoading(true);
     setDocumentation('');
 
-    console.log('🚀 Starting AI documentation generation...');
+    console.log('[Client] Starting AI documentation generation');
+    console.log('[Client] Custom prompt length:', currentPrompt.length);
     const startTime = Date.now();
 
     try {
@@ -336,24 +337,25 @@ export default function Home() {
       });
 
       const data = await response.json();
-      const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+      const clientElapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
 
       if (response.ok) {
-        console.log(`✅ Documentation generated in ${elapsedTime}s`);
-        console.log(`📊 Tokens used: ${data.tokensUsed || 'N/A'}`);
-        console.log(`🤖 Model: ${data.model || 'N/A'}`);
+        console.log('[Client] Documentation generated successfully');
+        console.log('[Client] Total time:', clientElapsedTime + 's');
+        console.log('[Client] Server time:', data.timeTaken + 's');
+        console.log('[Client] Tokens used:', data.tokensUsed);
+        console.log('[Client] Model:', data.model);
 
         setDocumentation(data.documentation);
 
-        // Show success message with details
-        alert(`✅ Documentation Generated Successfully!\n\n⏱️ Time taken: ${elapsedTime}s\n📊 Tokens used: ${data.tokensUsed || 'N/A'}\n🤖 Model: ${data.model || 'N/A'}`);
+        alert(`Documentation Generated Successfully\n\nTime: ${data.timeTaken}s\nTokens: ${data.tokensUsed}\nModel: ${data.model}`);
       } else {
-        console.error('❌ Generation failed:', data.error);
-        alert(`❌ Error: ${data.error || 'Failed to generate documentation'}\n\nPlease check:\n1. GROQ_API_KEY is set in .env.local\n2. API key is valid\n3. RPG code is not too large`);
+        console.error('[Client] Generation failed:', data.error);
+        alert(`Error: ${data.error || 'Failed to generate documentation'}\n\nCheck console for details.`);
       }
     } catch (error) {
-      console.error('❌ Request failed:', error);
-      alert(`❌ Error: ${error.message}\n\nPlease check your internet connection and try again.`);
+      console.error('[Client] Request failed:', error);
+      alert(`Error: ${error.message}\n\nCheck your internet connection.`);
     } finally {
       setLoading(false);
     }
