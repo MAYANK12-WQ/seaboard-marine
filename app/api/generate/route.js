@@ -72,14 +72,30 @@ export async function POST(request) {
       throw new Error('AI returned empty response');
     }
 
+    // Calculate cost based on GPT-4o pricing
+    // GPT-4o pricing: $2.50 per 1M input tokens, $10.00 per 1M output tokens
+    const inputTokens = data.usage?.prompt_tokens || 0;
+    const outputTokens = data.usage?.completion_tokens || 0;
+    const inputCost = (inputTokens / 1000000) * 2.50;
+    const outputCost = (outputTokens / 1000000) * 10.00;
+    const totalCost = inputCost + outputCost;
+
     console.log('[API] Documentation generated successfully');
     console.log('[API] Time taken:', elapsedTime + 's');
     console.log('[API] Tokens used:', data.usage?.total_tokens || 0);
+    console.log('[API] Cost: $' + totalCost.toFixed(4));
     console.log('[API] Output length:', documentation.length, 'characters');
 
     return NextResponse.json({
       documentation,
       tokensUsed: data.usage?.total_tokens || 0,
+      inputTokens,
+      outputTokens,
+      cost: totalCost.toFixed(4),
+      costBreakdown: {
+        input: inputCost.toFixed(4),
+        output: outputCost.toFixed(4)
+      },
       model: data.model,
       timeTaken: elapsedTime
     });

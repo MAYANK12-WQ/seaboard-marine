@@ -200,10 +200,40 @@ export default function Home() {
     }
   };
 
-  const handleFileUpload = (e, type) => {
-    const file = e.target.files[0];
-    if (file) {
-      processFile(file, type);
+  const handleFileUpload = async (e, type) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    // If single file, use existing logic
+    if (files.length === 1) {
+      processFile(files[0], type);
+      return;
+    }
+
+    // Handle multiple txt files
+    try {
+      let combinedText = '';
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+          const text = await file.text();
+          combinedText += `\n\n// ========== FILE: ${file.name} ==========\n\n`;
+          combinedText += text;
+        }
+      }
+
+      if (combinedText) {
+        if (type === 'rpg') {
+          setRpgCode(combinedText);
+          setUploadedFiles(prev => ({ ...prev, rpg: { name: 'Multiple files', type: 'text', count: files.length } }));
+        } else {
+          setMessageList(combinedText);
+          setUploadedFiles(prev => ({ ...prev, msg: { name: 'Multiple files', type: 'text', count: files.length } }));
+        }
+        alert(`✅ ${files.length} files loaded successfully!`);
+      }
+    } catch (error) {
+      alert('Error reading files: ' + error.message);
     }
   };
 
@@ -361,14 +391,15 @@ export default function Home() {
         console.log('[Client] Total time:', clientElapsedTime + 's');
         console.log('[Client] Server time:', data.timeTaken + 's');
         console.log('[Client] Tokens used:', data.tokensUsed);
+        console.log('[Client] Cost:', data.cost ? '$' + data.cost : 'N/A');
         console.log('[Client] Model:', data.model);
 
         setDocumentation(data.documentation);
 
-        alert(`Documentation Generated Successfully\n\nTime: ${data.timeTaken}s\nTokens: ${data.tokensUsed}\nModel: ${data.model}`);
+        alert(`✅ Documentation Generated Successfully!\n\n⏱️ Time: ${data.timeTaken}s\n🔢 Tokens: ${data.tokensUsed} (Input: ${data.inputTokens || 'N/A'} | Output: ${data.outputTokens || 'N/A'})\n💰 Cost: $${data.cost || '0.0000'}\n🤖 Model: ${data.model}`);
       } else {
         console.error('[Client] Generation failed:', data.error);
-        alert(`Error: ${data.error || 'Failed to generate documentation'}\n\nCheck console for details.`);
+        alert(`❌ Error: ${data.error || 'Failed to generate documentation'}\n\nCheck console for details.`);
       }
     } catch (error) {
       console.error('[Client] Request failed:', error);
@@ -539,6 +570,7 @@ export default function Home() {
                 <input
                   type="file"
                   accept=".txt"
+                  multiple
                   onChange={(e) => handleFileUpload(e, 'rpg')}
                   className="file-input"
                   id="rpgTextUpload"
@@ -546,8 +578,8 @@ export default function Home() {
                 />
                 <label htmlFor="rpgTextUpload" className="upload-button" style={{ background: 'linear-gradient(135deg, #27ae60 0%, #229954 100%)' }}>
                   {uploadedFiles.rpg && uploadedFiles.rpg.type === 'text'
-                    ? `✅ ${uploadedFiles.rpg.name} - Click to change`
-                    : '📄 Upload .txt File'}
+                    ? `✅ ${uploadedFiles.rpg.count || 1} file(s) uploaded`
+                    : '📄 Upload .txt File(s)'}
                 </label>
               </div>
             </div>
