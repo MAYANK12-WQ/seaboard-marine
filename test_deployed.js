@@ -5,7 +5,7 @@
 // 3. No hardcoded/default output
 // 4. OpenAI API is being called
 
-const DEPLOYED_URL = 'https://seaboard-marine-ocrp39b28-damco-projects.vercel.app';
+const DEPLOYED_URL = 'https://seaboard-marine-j9ekik6kc-damco-projects.vercel.app';
 
 const rpgCode = `     FMASTFILE  IF   E           K DISK
      FTRANFILE  UF A E           K DISK
