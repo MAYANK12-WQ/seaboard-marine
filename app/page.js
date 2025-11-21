@@ -108,6 +108,18 @@ export default function Home() {
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Specific document type boxes for RPG-related files
+  const [documentTypes, setDocumentTypes] = useState([
+    { id: 'callingTree', label: 'Program Calling Tree', description: 'Shows program call hierarchy and dependencies', content: '', files: [] },
+    { id: 'fileFields', label: 'File Fields Reference', description: 'Field definitions and data dictionary', content: '', files: [] },
+    { id: 'messageFile', label: 'Message File', description: 'Error messages, status messages, and message IDs', content: '', files: [] },
+    { id: 'programTypes', label: 'Program Files (RPG/CLP/RPGLE/CLLE/SQLRPG/SQLRPGLE)', description: 'Main program source code files', content: '', files: [] },
+    { id: 'ddsFiles', label: 'DDS/DDL Files', description: 'Data Description Specifications and database definitions', content: '', files: [] },
+    { id: 'copyFiles', label: 'Copy Files', description: 'Copybook and include files (/COPY members)', content: '', files: [] },
+    { id: 'moduleFiles', label: 'Module Files', description: 'ILE module source code', content: '', files: [] },
+    { id: 'serviceProgram', label: 'Service Program Files', description: 'Service program source and binder language', content: '', files: [] }
+  ]);
+
   // Load prompt from localStorage on mount
   useEffect(() => {
     const savedPrompt = localStorage.getItem('rpg_prompt');
@@ -370,7 +382,27 @@ export default function Home() {
     console.log('[Client] Custom prompt length:', currentPrompt.length);
     const startTime = Date.now();
 
-    try {
+    // Build document context from the 8 specific document type boxes
+      const docContextArray = documentTypes
+        .filter(doc => doc.content && doc.files.length > 0)
+        .map(doc => {
+          let context = `
+╔════════════════════════════════════════════════════════════════════╗
+║ DOCUMENT CATEGORY: ${doc.label.toUpperCase()}
+║ Description: ${doc.description}
+║ Files Included: ${doc.files.join(', ')}
+║ Total Files: ${doc.files.length}
+╚════════════════════════════════════════════════════════════════════╝
+
+[BEGIN ${doc.label.toUpperCase()} CONTENT]
+${doc.content}
+[END ${doc.label.toUpperCase()} CONTENT]
+`;
+          return context;
+        });
+      const documentContext = docContextArray.join('\n\n');
+
+      try {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: {
@@ -380,6 +412,7 @@ export default function Home() {
           rpgCode,
           messageList,
           customPrompt: currentPrompt,
+          documentContext: documentContext,
         }),
       });
 
@@ -430,6 +463,48 @@ export default function Home() {
     entry.prompt.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.action.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Handle document type file upload (supports multiple files)
+  const handleDocTypeFile = async (e, id) => {
+    const selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length === 0) return;
+
+    try {
+      let combinedContent = '';
+      const fileNames = [];
+
+      for (const file of selectedFiles) {
+        if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.rpg') || file.name.endsWith('.clp') || file.name.endsWith('.rpgle') || file.name.endsWith('.clle') || file.name.endsWith('.dds') || file.name.endsWith('.pf') || file.name.endsWith('.lf') || file.name.endsWith('.sql')) {
+          const text = await file.text();
+          combinedContent += `\n// ========== FILE: ${file.name} ==========\n`;
+          combinedContent += text;
+          combinedContent += `\n// ========== END OF FILE: ${file.name} ==========\n`;
+          fileNames.push(file.name);
+        }
+      }
+
+      if (fileNames.length > 0) {
+        setDocumentTypes(prev => prev.map(doc =>
+          doc.id === id ? { ...doc, content: combinedContent, files: fileNames } : doc
+        ));
+        alert(`✅ ${fileNames.length} file(s) loaded!\nFiles: ${fileNames.join(', ')}`);
+      } else {
+        alert('Please upload valid text files (.txt, .rpg, .clp, .rpgle, .clle, .dds, .pf, .lf, .sql)');
+      }
+    } catch (error) {
+      alert('Error reading files: ' + error.message);
+    }
+
+    // Reset input so same files can be selected again
+    e.target.value = '';
+  };
+
+  // Clear document type box
+  const clearDocType = (id) => {
+    setDocumentTypes(prev => prev.map(doc =>
+      doc.id === id ? { ...doc, content: '', files: [] } : doc
+    ));
+  };
 
   return (
     <div className="container">
@@ -534,6 +609,115 @@ export default function Home() {
                 {currentPrompt}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Reference Documents - Specific File Types for RPG Analysis */}
+        <div className="input-section" style={{ marginBottom: '2rem' }}>
+          <div className="form-group">
+            <label style={{ marginBottom: '0.5rem', display: 'block' }}>
+              <strong>Reference Documents</strong>
+              <span className="optional"> (Optional - Upload supporting files for better AI analysis)</span>
+            </label>
+            <p style={{ fontSize: '0.85rem', color: '#7f8c8d', marginBottom: '1.5rem' }}>
+              Upload related files to help AI understand the complete program context. Each category accepts multiple files.
+            </p>
+
+            {/* 8 Specific Document Type Rows */}
+            {documentTypes.map((doc) => (
+              <div key={doc.id} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                marginBottom: '0.75rem',
+                padding: '0.75rem 1rem',
+                background: doc.files.length > 0 ? '#f0fff4' : '#f8f9fa',
+                borderRadius: '8px',
+                border: doc.files.length > 0 ? '2px solid #27ae60' : '1px solid #e0e0e0'
+              }}>
+                {/* Document Type Label */}
+                <div style={{ minWidth: '320px' }}>
+                  <span style={{
+                    fontWeight: '600',
+                    color: '#1e3c72',
+                    fontSize: '0.95rem',
+                    display: 'block'
+                  }}>
+                    {doc.label}
+                  </span>
+                  <span style={{
+                    fontSize: '0.8rem',
+                    color: '#7f8c8d'
+                  }}>
+                    {doc.description}
+                  </span>
+                </div>
+
+                {/* File Count Display */}
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  {doc.files.length > 0 ? (
+                    <span style={{ fontSize: '0.85rem', color: '#27ae60', fontWeight: '500' }}>
+                      ✅ {doc.files.length} file(s): {doc.files.slice(0, 2).join(', ')}{doc.files.length > 2 ? ` +${doc.files.length - 2} more` : ''}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.85rem', color: '#95a5a6' }}>No files uploaded</span>
+                  )}
+                </div>
+
+                {/* File Upload Button - Multiple Files */}
+                <input
+                  type="file"
+                  accept=".txt,.rpg,.clp,.rpgle,.clle,.dds,.pf,.lf,.sql,.sqlrpg,.sqlrpgle,.bnd,.srvpgm"
+                  multiple
+                  onChange={(e) => handleDocTypeFile(e, doc.id)}
+                  id={`docType_${doc.id}`}
+                  style={{ display: 'none' }}
+                />
+                <label
+                  htmlFor={`docType_${doc.id}`}
+                  style={{
+                    display: 'inline-block',
+                    background: doc.files.length > 0 ? 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    padding: '0.6rem 1rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: '500',
+                    whiteSpace: 'nowrap',
+                    minWidth: '120px',
+                    textAlign: 'center'
+                  }}
+                >
+                  {doc.files.length > 0 ? '📁 Add More' : '📁 Upload Files'}
+                </label>
+
+                {/* Clear Button */}
+                {doc.files.length > 0 && (
+                  <button
+                    onClick={() => clearDocType(doc.id)}
+                    style={{
+                      background: '#e74c3c',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '0.6rem 0.8rem',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    ✕ Clear
+                  </button>
+                )}
+              </div>
+            ))}
+
+            <div style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#2c3e50', background: '#e8f4f8', padding: '1rem', borderRadius: '6px', border: '1px solid #3498db' }}>
+              <strong>📋 Supported File Types:</strong> .txt, .rpg, .clp, .rpgle, .clle, .sqlrpg, .sqlrpgle, .dds, .pf, .lf, .sql, .bnd, .srvpgm
+              <br />
+              <strong>💡 Tip:</strong> The AI will analyze each file type separately and won't mix them up during documentation generation.
+            </div>
           </div>
         </div>
 

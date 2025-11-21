@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request) {
   try {
-    const { rpgCode, messageList, customPrompt } = await request.json();
+    const { rpgCode, messageList, customPrompt, documentContext } = await request.json();
 
     if (!rpgCode || !rpgCode.trim()) {
       return NextResponse.json(
@@ -31,7 +31,54 @@ export async function POST(request) {
       userMessage += `\n\nMessage List:\n${messageList}`;
     }
 
-    userMessage += `\n\nGenerate documentation following the system prompt instructions exactly.`;
+    // Add document context if provided (from the 8 specific document type boxes)
+    if (documentContext && documentContext.trim()) {
+      userMessage += `\n\n
+████████████████████████████████████████████████████████████████████████████████
+█                        REFERENCE DOCUMENTS FOR ANALYSIS                      █
+████████████████████████████████████████████████████████████████████████████████
+
+CRITICAL INSTRUCTIONS FOR AI - READ CAREFULLY:
+
+1. DOCUMENT CATEGORIES PROVIDED:
+   • Program Calling Tree - Use for understanding program flow and call hierarchy
+   • File Fields Reference - Use for field definitions and data dictionary lookups
+   • Message File - Use for error messages, status messages, and message ID references
+   • Program Files (RPG/CLP/RPGLE/CLLE/SQLRPG/SQLRPGLE) - Main source code to analyze
+   • DDS/DDL Files - Use for database structure and file definitions
+   • Copy Files - Use for copybook references and shared code
+   • Module Files - Use for ILE module dependencies
+   • Service Program Files - Use for service program bindings
+
+2. ANALYSIS RULES:
+   ✓ Each category is CLEARLY MARKED with BEGIN/END tags
+   ✓ DO NOT mix content from different categories
+   ✓ When referencing data, ALWAYS cite the source category
+   ✓ Use Message File for exact message text when you see message IDs
+   ✓ Use File Fields Reference for field descriptions in data mappings
+   ✓ Use Program Calling Tree for the Call Stack section
+
+3. CROSS-REFERENCE PROPERLY:
+   - Message IDs → Look up in MESSAGE FILE section
+   - Field names → Look up in FILE FIELDS REFERENCE section
+   - Called programs → Reference PROGRAM CALLING TREE section
+   - File structures → Reference DDS/DDL FILES section
+
+${documentContext}
+
+████████████████████████████████████████████████████████████████████████████████
+█                         END OF REFERENCE DOCUMENTS                           █
+████████████████████████████████████████████████████████████████████████████████`;
+    }
+
+    userMessage += `\n\nGenerate documentation following the system prompt instructions exactly.
+
+FINAL REMINDERS:
+- Use the reference documents to provide ACCURATE information
+- Cross-reference message IDs with the Message File for exact message text
+- Use File Fields Reference for accurate field descriptions
+- Cite sources when using reference document information
+- Keep each document category's information separate and properly attributed`;
 
     console.log('[API] Sending request to OpenAI API (gpt-4o)...');
     const startTime = Date.now();
