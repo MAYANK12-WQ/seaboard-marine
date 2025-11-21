@@ -110,14 +110,14 @@ export default function Home() {
 
   // Specific document type boxes for RPG-related files
   const [documentTypes, setDocumentTypes] = useState([
-    { id: 'callingTree', label: 'Program Calling Tree', description: 'Shows program call hierarchy and dependencies', content: '', files: [] },
-    { id: 'fileFields', label: 'File Fields Reference', description: 'Field definitions and data dictionary', content: '', files: [] },
-    { id: 'messageFile', label: 'Message File', description: 'Error messages, status messages, and message IDs', content: '', files: [] },
-    { id: 'programTypes', label: 'Program Files (RPG/CLP/RPGLE/CLLE/SQLRPG/SQLRPGLE)', description: 'Main program source code files', content: '', files: [] },
-    { id: 'ddsFiles', label: 'DDS/DDL Files', description: 'Data Description Specifications and database definitions', content: '', files: [] },
-    { id: 'copyFiles', label: 'Copy Files', description: 'Copybook and include files (/COPY members)', content: '', files: [] },
-    { id: 'moduleFiles', label: 'Module Files', description: 'ILE module source code', content: '', files: [] },
-    { id: 'serviceProgram', label: 'Service Program Files', description: 'Service program source and binder language', content: '', files: [] }
+    { id: 'callingTree', label: 'Program Calling Tree', description: 'Shows program call hierarchy and dependencies', content: '', files: [], userNote: '' },
+    { id: 'fileFields', label: 'File Fields Reference', description: 'Field definitions and data dictionary', content: '', files: [], userNote: '' },
+    { id: 'messageFile', label: 'Message File', description: 'Error messages, status messages, and message IDs', content: '', files: [], userNote: '' },
+    { id: 'programTypes', label: 'Program Files (RPG/CLP/RPGLE/CLLE/SQLRPG/SQLRPGLE)', description: 'Main program source code files', content: '', files: [], userNote: '' },
+    { id: 'ddsFiles', label: 'DDS/DDL Files', description: 'Data Description Specifications and database definitions', content: '', files: [], userNote: '' },
+    { id: 'copyFiles', label: 'Copy Files', description: 'Copybook and include files (/COPY members)', content: '', files: [], userNote: '' },
+    { id: 'moduleFiles', label: 'Module Files', description: 'ILE module source code', content: '', files: [], userNote: '' },
+    { id: 'serviceProgram', label: 'Service Program Files', description: 'Service program source and binder language', content: '', files: [], userNote: '' }
   ]);
 
   // Load prompt from localStorage on mount
@@ -392,7 +392,11 @@ export default function Home() {
 ║ Description: ${doc.description}
 ║ Files Included: ${doc.files.join(', ')}
 ║ Total Files: ${doc.files.length}
+║ User Note: ${doc.userNote || 'No additional notes provided'}
+║ Format Info: ${doc.userNote ? doc.userNote : 'Standard text format'}
 ╚════════════════════════════════════════════════════════════════════╝
+
+IMPORTANT: ${doc.userNote ? `User specified: "${doc.userNote}" - Use this information to understand the format and version of these files.` : 'No special format notes.'}
 
 [BEGIN ${doc.label.toUpperCase()} CONTENT]
 ${doc.content}
@@ -499,10 +503,17 @@ ${doc.content}
     e.target.value = '';
   };
 
+  // Handle user note change for document type
+  const handleDocTypeNote = (id, value) => {
+    setDocumentTypes(prev => prev.map(doc =>
+      doc.id === id ? { ...doc, userNote: value } : doc
+    ));
+  };
+
   // Clear document type box
   const clearDocType = (id) => {
     setDocumentTypes(prev => prev.map(doc =>
-      doc.id === id ? { ...doc, content: '', files: [] } : doc
+      doc.id === id ? { ...doc, content: '', files: [], userNote: '' } : doc
     ));
   };
 
@@ -626,89 +637,117 @@ ${doc.content}
             {/* 8 Specific Document Type Rows */}
             {documentTypes.map((doc) => (
               <div key={doc.id} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-                marginBottom: '0.75rem',
-                padding: '0.75rem 1rem',
+                marginBottom: '1rem',
+                padding: '1rem',
                 background: doc.files.length > 0 ? '#f0fff4' : '#f8f9fa',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 border: doc.files.length > 0 ? '2px solid #27ae60' : '1px solid #e0e0e0'
               }}>
-                {/* Document Type Label */}
-                <div style={{ minWidth: '320px' }}>
-                  <span style={{
-                    fontWeight: '600',
-                    color: '#1e3c72',
-                    fontSize: '0.95rem',
-                    display: 'block'
-                  }}>
-                    {doc.label}
-                  </span>
-                  <span style={{
-                    fontSize: '0.8rem',
-                    color: '#7f8c8d'
-                  }}>
-                    {doc.description}
-                  </span>
-                </div>
-
-                {/* File Count Display */}
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  {doc.files.length > 0 ? (
-                    <span style={{ fontSize: '0.85rem', color: '#27ae60', fontWeight: '500' }}>
-                      ✅ {doc.files.length} file(s): {doc.files.slice(0, 2).join(', ')}{doc.files.length > 2 ? ` +${doc.files.length - 2} more` : ''}
+                {/* Top Row - Label and Buttons */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  marginBottom: '0.75rem'
+                }}>
+                  {/* Document Type Label */}
+                  <div style={{ minWidth: '280px' }}>
+                    <span style={{
+                      fontWeight: '600',
+                      color: '#1e3c72',
+                      fontSize: '0.95rem',
+                      display: 'block'
+                    }}>
+                      {doc.label}
                     </span>
-                  ) : (
-                    <span style={{ fontSize: '0.85rem', color: '#95a5a6' }}>No files uploaded</span>
-                  )}
-                </div>
-
-                {/* File Upload Button - Multiple Files */}
-                <input
-                  type="file"
-                  accept=".txt,.rpg,.clp,.rpgle,.clle,.dds,.pf,.lf,.sql,.sqlrpg,.sqlrpgle,.bnd,.srvpgm"
-                  multiple
-                  onChange={(e) => handleDocTypeFile(e, doc.id)}
-                  id={`docType_${doc.id}`}
-                  style={{ display: 'none' }}
-                />
-                <label
-                  htmlFor={`docType_${doc.id}`}
-                  style={{
-                    display: 'inline-block',
-                    background: doc.files.length > 0 ? 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: 'white',
-                    padding: '0.6rem 1rem',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    fontWeight: '500',
-                    whiteSpace: 'nowrap',
-                    minWidth: '120px',
-                    textAlign: 'center'
-                  }}
-                >
-                  {doc.files.length > 0 ? '📁 Add More' : '📁 Upload Files'}
-                </label>
-
-                {/* Clear Button */}
-                {doc.files.length > 0 && (
-                  <button
-                    onClick={() => clearDocType(doc.id)}
-                    style={{
-                      background: '#e74c3c',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      padding: '0.6rem 0.8rem',
+                    <span style={{
                       fontSize: '0.8rem',
+                      color: '#7f8c8d'
+                    }}>
+                      {doc.description}
+                    </span>
+                  </div>
+
+                  {/* File Count Display */}
+                  <div style={{ flex: 1, minWidth: '120px' }}>
+                    {doc.files.length > 0 ? (
+                      <span style={{ fontSize: '0.85rem', color: '#27ae60', fontWeight: '500' }}>
+                        ✅ {doc.files.length} file(s)
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.85rem', color: '#95a5a6' }}>No files</span>
+                    )}
+                  </div>
+
+                  {/* File Upload Button - Multiple Files */}
+                  <input
+                    type="file"
+                    accept=".txt,.rpg,.clp,.rpgle,.clle,.dds,.pf,.lf,.sql,.sqlrpg,.sqlrpgle,.bnd,.srvpgm,.pdf"
+                    multiple
+                    onChange={(e) => handleDocTypeFile(e, doc.id)}
+                    id={`docType_${doc.id}`}
+                    style={{ display: 'none' }}
+                  />
+                  <label
+                    htmlFor={`docType_${doc.id}`}
+                    style={{
+                      display: 'inline-block',
+                      background: doc.files.length > 0 ? 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '6px',
                       cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: '500',
                       whiteSpace: 'nowrap'
                     }}
                   >
-                    ✕ Clear
-                  </button>
+                    {doc.files.length > 0 ? '📁 Add More' : '📁 Upload'}
+                  </label>
+
+                  {/* Clear Button */}
+                  {(doc.files.length > 0 || doc.userNote) && (
+                    <button
+                      onClick={() => clearDocType(doc.id)}
+                      style={{
+                        background: '#e74c3c',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '0.5rem 0.75rem',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✕ Clear
+                    </button>
+                  )}
+                </div>
+
+                {/* Bottom Row - User Note Text Input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#7f8c8d', minWidth: '80px' }}>AI Note:</span>
+                  <input
+                    type="text"
+                    placeholder="e.g., Text format, PDF extracted, RPGLE v7.4, Fixed-format RPG, Free-format SQLRPGLE..."
+                    value={doc.userNote}
+                    onChange={(e) => handleDocTypeNote(doc.id, e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '0.85rem',
+                      background: 'white'
+                    }}
+                  />
+                </div>
+
+                {/* Show uploaded files list */}
+                {doc.files.length > 0 && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#27ae60' }}>
+                    Files: {doc.files.join(', ')}
+                  </div>
                 )}
               </div>
             ))}
