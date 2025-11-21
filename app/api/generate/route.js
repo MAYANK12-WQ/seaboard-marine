@@ -35,7 +35,7 @@ export async function POST(request) {
     if (documentContext && documentContext.trim()) {
       userMessage += `\n\n
 ████████████████████████████████████████████████████████████████████████████████
-█                        REFERENCE DOCUMENTS FOR ANALYSIS                      █
+█                         REFERENCE DOCUMENTS FOR ANALYSIS                       █
 ████████████████████████████████████████████████████████████████████████████████
 
 CRITICAL INSTRUCTIONS FOR AI - READ CAREFULLY:
@@ -119,7 +119,7 @@ FINAL REMINDERS:
       throw new Error('AI returned empty response');
     }
 
-    // Calculate cost based on GPT-4o pricing
+    // Cost calculation for GPT-4o
     // GPT-4o pricing: $2.50 per 1M input tokens, $10.00 per 1M output tokens
     const inputTokens = data.usage?.prompt_tokens || 0;
     const outputTokens = data.usage?.completion_tokens || 0;
